@@ -459,7 +459,7 @@ impl Application for Siglauncher {
                 Command::none()
             }
             Message::GithubPressed => {
-                webbrowser::open("github.com/jafkc/siglauncher").unwrap();
+                webbrowser::open("https://github.com/jafkc/siglauncher").unwrap();
                 Command::none()
             },
         }
