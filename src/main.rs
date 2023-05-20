@@ -174,7 +174,7 @@ impl Application for Siglauncher {
     }
 
     fn title(&self) -> String {
-        String::from("SigLauncher")
+        String::from("Siglauncher")
     }
 
     fn update(&mut self, message: Message) -> iced::Command<Message> {
@@ -251,6 +251,7 @@ impl Application for Siglauncher {
                     self.ram,
                     self.currentjavaname.clone(),
                     self.currentworkingdirectory.clone(),
+                    self.gamemodelinux.clone()
                 )
                 .unwrap();
                 self.screen = 1;
@@ -466,7 +467,7 @@ impl Application for Siglauncher {
     }
     fn view(&self) -> Element<Message> {
         //used in mainscreen
-        let title = text("SigLauncher")
+        let title = text("Siglauncher")
             .size(50)
             .horizontal_alignment(alignment::Horizontal::Center);
         let userinput = text_input("Username", &self.username)
@@ -831,6 +832,7 @@ fn updatesettingsfile(
     ram: f64,
     currentjvm: String,
     currentworkingdirectory: String,
+    gamemode: bool,
 ) -> std::io::Result<()> {
     set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
 
@@ -842,8 +844,8 @@ fn updatesettingsfile(
 
     data["ram"] = serde_json::Value::Number(Number::from_f64(ram).unwrap());
     data["currentjavaname"] = serde_json::Value::String(currentjvm.replace("\"", ""));
-    data["currentworkingdirectory"] =
-        serde_json::Value::String(currentworkingdirectory.replace("\"", ""));
+    data["currentworkingdirectory"] = serde_json::Value::String(currentworkingdirectory.replace("\"", ""));
+    data["gamemodelinux"] = serde_json::Value::Bool(gamemode);
 
     let serialized = serde_json::to_string_pretty(&data)?;
 
