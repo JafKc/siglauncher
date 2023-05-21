@@ -13,6 +13,8 @@ mod backend;
 mod theme;
 use self::widget::Element;
 
+
+
 #[derive(Serialize, Deserialize)]
 struct JVMs {
     name: String,
@@ -57,10 +59,12 @@ struct Siglauncher {
     //add directory profile
     daddname: String,
     daddpath: String,
+
+    state: String,
 }
 
 #[tokio::main]
-pub async fn main() -> iced::Result {
+async fn main() -> iced::Result {
     checksettingsfile();
     let icon = include_bytes!("icons/siglaunchericon.png");
 
@@ -198,6 +202,8 @@ impl Application for Siglauncher {
                     println!("{}", dprofile[1]);
                     let dprofilepath = dprofile[1].replace("\"", "");
 
+                    self.state = String::from("Launching...");
+                    
                     Command::perform(
                         async move {
                             backend::start(
@@ -228,6 +234,7 @@ impl Application for Siglauncher {
             }
             Message::Launched(_) => {
                 println!("Backend finished.");
+                self.state = String::from("Launched.");
                 Command::none()
             }
 
@@ -679,6 +686,9 @@ impl Application for Siglauncher {
         let mut drow = Row::new().spacing(50);
         drow = drow.push(dreturnbutton);
         drow = drow.push(daddbutton);
+
+
+        let state = text(&self.state).horizontal_alignment(alignment::Horizontal::Center).vertical_alignment(alignment::Vertical::Bottom);
         let content;
         match self.screen {
             1 => {
@@ -688,14 +698,15 @@ impl Application for Siglauncher {
                     launchbutton,
                     optionsbutton,
                     verinstallbutton,
-                    githubbutton
+                    githubbutton,
+                    state
                 ]
                 .spacing(15)
                 .max_width(800)
                 .align_items(Alignment::Center)
             }
             2 => {
-                content = column![ititle, installpicker, installbutton, ireturnbutton,]
+                content = column![ititle, installpicker, installbutton, ireturnbutton, state]
                     .spacing(15)
                     .max_width(800)
                     .align_items(Alignment::Center)
@@ -857,6 +868,7 @@ fn updatesettingsfile(
 
     Ok(())
 }
+
 
 mod widget {
     use crate::theme::Theme;
