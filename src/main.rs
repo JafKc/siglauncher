@@ -34,7 +34,7 @@ struct Siglauncher {
     ram: f64,
     currentjavaname: String,
     gamemodelinux: bool,
-    currentworkingdirectory: String,
+    currentprofilefolder: String,
     #[serde(skip_serializing)]
     jvms: Vec<String>,
     #[serde(skip_serializing)]
@@ -50,7 +50,7 @@ struct Siglauncher {
     #[serde(skip_serializing)]
     pdirectories: Vec<String>,
     #[serde(skip_serializing)]
-    directoryprofile: Vec<String>,
+    profilefolder: Vec<String>,
 
     //add jvm
     jvmaddname: String,
@@ -99,7 +99,7 @@ enum Message {
     Apply,
     Return,
     JVMChanged(String),
-    DProfileChanged(String),
+    ProfileFChanged(String),
     GamemodeChanged(bool),
 
     InstallVersion,
@@ -144,15 +144,15 @@ impl Application for Siglauncher {
         }
         let currentjavaname = &currentjvm[0];
 
-        let mut currentdirectoryprofile = Vec::new();
+        let mut currentprofilefolder = Vec::new();
         let mut directorynames: Vec<String> = Vec::new();
 
-        if let Some(directories) = p["Game working directories"].as_array() {
+        if let Some(directories) = p["Game profile folders"].as_array() {
             for directory in directories {
                 directorynames.push(directory["name"].to_string());
-                if directory["name"] == p["currentworkingdirectory"] {
-                    currentdirectoryprofile.push(directory["name"].to_string());
-                    currentdirectoryprofile.push(directory["path"].to_string());
+                if directory["name"] == p["currentprofilefolder"] {
+                    currentprofilefolder.push(directory["name"].to_string());
+                    currentprofilefolder.push(directory["path"].to_string());
                 }
             }
         }
@@ -168,9 +168,9 @@ impl Application for Siglauncher {
                 jvms: jvmnames,
                 currentjavaname: currentjavaname.to_string(),
                 gamemodelinux: p["gamemodelinux"].as_bool().unwrap(),
-                currentworkingdirectory: p["currentworkingdirectory"].to_string(),
+                currentprofilefolder: p["currentprofilefolder"].to_string(),
                 pdirectories: directorynames,
-                directoryprofile: currentdirectoryprofile,
+                profilefolder: currentprofilefolder,
                 ..Default::default()
             },
             Command::none(),
@@ -198,7 +198,7 @@ impl Application for Siglauncher {
                     let jvmargsvec = jvmargss.split(' ').map(|s| s.to_owned()).collect();
                     let ram = self.ram.clone();
                     let gamemode = self.gamemodelinux;
-                    let dprofile = self.directoryprofile.clone();
+                    let dprofile = self.profilefolder.clone();
                     println!("{}", dprofile[1]);
                     let dprofilepath = dprofile[1].replace("\"", "");
 
@@ -257,7 +257,7 @@ impl Application for Siglauncher {
                 updatesettingsfile(
                     self.ram,
                     self.currentjavaname.clone(),
-                    self.currentworkingdirectory.clone(),
+                    self.currentprofilefolder.clone(),
                     self.gamemodelinux.clone()
                 )
                 .unwrap();
@@ -403,18 +403,18 @@ impl Application for Siglauncher {
                     file.read_to_string(&mut contents).unwrap();
 
                     let mut data: Value = serde_json::from_str(&contents).unwrap();
-                    let directoryprofile = GameWorkingDirectory {
+                    let profilefolder = GameWorkingDirectory {
                         name: self.daddname.clone(),
                         path: self.daddpath.clone(),
                     };
-                    if let Value::Array(arr) = &mut data["Game working directories"] {
-                        arr.push(serde_json::json!(directoryprofile));
-                        data["Game working directories"] = serde_json::json!(arr)
+                    if let Value::Array(arr) = &mut data["Game profile folders"] {
+                        arr.push(serde_json::json!(profilefolder));
+                        data["Game profile folders"] = serde_json::json!(arr)
                     }
 
                     let mut updateddirectorieslist = Vec::new();
 
-                    if let Some(directories) = data["Game working directories"].as_array() {
+                    if let Some(directories) = data["Game profile folders"].as_array() {
                         for directory in directories {
                             updateddirectorieslist.push(directory["name"].to_string());
                         }
@@ -435,7 +435,7 @@ impl Application for Siglauncher {
                     Command::none()
                 }
             }
-            Message::DProfileChanged(value) => {
+            Message::ProfileFChanged(value) => {
                 set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
 
                 let mut file = File::open("launchsettings.json").unwrap();
@@ -447,7 +447,7 @@ impl Application for Siglauncher {
                 let mut newprofile: Vec<String> = Vec::new();
                 let mut newprofilename: String = String::new();
 
-                if let Some(dprofiles) = p["Game working directories"].as_array() {
+                if let Some(dprofiles) = p["Game profile folders"].as_array() {
                     for dprofile in dprofiles {
                         if dprofile["name"] == value.replace("\"", "") {
                             newprofile.push(dprofile["name"].to_string());
@@ -458,8 +458,8 @@ impl Application for Siglauncher {
                     }
                 }
 
-                self.currentworkingdirectory = newprofilename;
-                self.directoryprofile = newprofile;
+                self.currentprofilefolder = newprofilename;
+                self.profilefolder = newprofile;
                 Command::none()
             }
             Message::GoDprofileMan => {
@@ -542,12 +542,12 @@ impl Application for Siglauncher {
         .max_width(800)
         .align_items(Alignment::Center);
 
-        let directoryprofileoptions = column![
+        let profilefolderoptions = column![
             text("Profile folder:").horizontal_alignment(alignment::Horizontal::Center),
             pick_list(
                 &self.pdirectories,
-                Some(&self.currentworkingdirectory).map(|s| s.replace("\"", "")),
-                Message::DProfileChanged
+                Some(&self.currentprofilefolder).map(|s| s.replace("\"", "")),
+                Message::ProfileFChanged
             )
             .width(250)
             .text_size(25),
@@ -565,7 +565,7 @@ impl Application for Siglauncher {
         .align_items(Alignment::Center);
         let mut java_dprofiles_row = Row::new().spacing(50);
         java_dprofiles_row = java_dprofiles_row.push(javaoptions);
-        java_dprofiles_row = java_dprofiles_row.push(directoryprofileoptions);
+        java_dprofiles_row = java_dprofiles_row.push(profilefolderoptions);
 
         let ramslider = slider(0.5..=16.0, self.ram, Message::RamChanged)
             .width(250)
@@ -766,7 +766,7 @@ fn checksettingsfile() {
             ram: 2.5,
             currentjavaname: "Default".to_string(),
             gamemodelinux: false,
-            currentworkingdirectory: "Default".to_string(),
+            currentprofilefolder: "Default".to_string(),
             ..Default::default()
         };
 
@@ -779,7 +779,7 @@ fn checksettingsfile() {
             path: String::new(),
         }];
         let mut json =
-            serde_json::json!({"JVMs" : jvm, "Game working directories": gamedirectories});
+            serde_json::json!({"JVMs" : jvm, "Game profile folders": gamedirectories});
 
         if let Value::Object(map) = &mut json {
             map.insert(
@@ -803,8 +803,8 @@ fn checksettingsfile() {
                 serde_json::to_value(launchsettings.gamemodelinux).unwrap(),
             );
             map.insert(
-                "currentworkingdirectory".to_owned(),
-                serde_json::to_value(launchsettings.currentworkingdirectory).unwrap(),
+                "currentprofilefolder".to_owned(),
+                serde_json::to_value(launchsettings.currentprofilefolder).unwrap(),
             );
         }
 
@@ -842,7 +842,7 @@ fn updateusersettingsfile(username: String, version: String) -> std::io::Result<
 fn updatesettingsfile(
     ram: f64,
     currentjvm: String,
-    currentworkingdirectory: String,
+    currentprofilefolder: String,
     gamemode: bool,
 ) -> std::io::Result<()> {
     set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
@@ -855,7 +855,7 @@ fn updatesettingsfile(
 
     data["ram"] = serde_json::Value::Number(Number::from_f64(ram).unwrap());
     data["currentjavaname"] = serde_json::Value::String(currentjvm.replace("\"", ""));
-    data["currentworkingdirectory"] = serde_json::Value::String(currentworkingdirectory.replace("\"", ""));
+    data["currentprofilefolder"] = serde_json::Value::String(currentprofilefolder.replace("\"", ""));
     data["gamemodelinux"] = serde_json::Value::Bool(gamemode);
 
     let serialized = serde_json::to_string_pretty(&data)?;
