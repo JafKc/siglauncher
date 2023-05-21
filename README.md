@@ -6,6 +6,7 @@ Siglauncher supports both Vanilla and Fabric and works only with Windows and Lin
 
 
 ### Installation
+##### Build method
 Requires Git and Rust to be installed. Type the following commands:
 
 ```bash
@@ -18,6 +19,11 @@ cd siglauncher
 cargo build --release
 ```
 The executable will appear inside **target/release**.
+
+##### Release method
+Download from [releases](https://github.com/JafKc/siglauncher/releases).
+
+Releases may be outdated and lack newer features.
 
 #### Java warning
 Siglauncher doesn't provide Java, you can download Java from the following links:
@@ -43,4 +49,4 @@ dnf install gamemode
 ```
 
 #### State
-The program handles errors poorly, so it's common for the launcher to crash. This issue will be fixed soon.
+The program handles errors poorly, so it's common for the launcher to crash. Still WIP.
