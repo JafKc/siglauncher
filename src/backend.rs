@@ -91,10 +91,10 @@ pub async fn start(
         &mc_dir, game_version, game_version
     ));
     if pdirectory.is_empty(){
-        env::set_current_dir(&pdirectory).expect("Failed to open Folder Profile!");
+        env::set_current_dir(&mc_dir).expect("Failed to open Folder Profile!");
     } else{
     fs::create_dir_all(&pdirectory).unwrap();
-    env::set_current_dir(&mc_dir).expect("Failed to open Folder Profile!");
+    env::set_current_dir(&pdirectory).expect("Failed to open Folder Profile!");
     }
     let mut mineprogram = if gamemode {
         Command::new("gamemoderun")
