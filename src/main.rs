@@ -91,7 +91,7 @@ enum Message {
 
     GoJavaMan,
     GoDprofileMan,
-    Launched(()),
+    Launched(Result<(), String>),
     Gotlist(Vec<String>),
     DownloadChanged(String),
 
@@ -232,9 +232,13 @@ impl Application for Siglauncher {
                 self.version = Some(version);
                 Command::none()
             }
-            Message::Launched(_) => {
+            Message::Launched(result) => {
                 println!("Backend finished.");
+                if result.is_ok(){
                 self.state = String::from("Launched.");
+                } else {
+                    self.state = result.err().unwrap();
+                }
                 Command::none()
             }
 

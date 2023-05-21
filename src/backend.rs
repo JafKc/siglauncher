@@ -17,7 +17,10 @@ pub async fn start(
     ram: f64,
     gamemode: bool,
     pdirectory: String,
-) {
+) -> Result<(), String> {
+    let result = std::panic::catch_unwind(|| {
+
+
     let operationalsystem = std::env::consts::OS;
     let player = player;
     let mc_dir = match std::env::consts::OS {
@@ -134,6 +137,12 @@ pub async fn start(
         ]);
     println!("{:?}", mineprogram);
     mineprogram.spawn().expect("Failed to execute Minecraft!");
+});
+
+match result {
+    Ok(_) => Ok(()),
+    Err(_) => Err("A panic occurred. Maybe there is something wrong with your options.".to_string()),
+}
 }
 
 #[tokio::main]
