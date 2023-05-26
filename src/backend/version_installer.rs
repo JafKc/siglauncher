@@ -311,19 +311,17 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
 }
 
 #[tokio::main]
-pub async fn getversionlist() -> Vec<String> {
+pub async fn getversionlist() -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let versionlistjson = reqwest::Client::new()
         .get("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
         .send()
-        .await
-        .unwrap()
+        .await?
         .text()
-        .await
-        .unwrap();
+        .await?;
 
     let content = serde_json::from_str(&versionlistjson);
 
-    let p: Value = content.unwrap();
+    let p: Value = content?;
 
     let mut versionlist: Vec<String> = vec![];
     if let Some(versions) = p["versions"].as_array() {
@@ -333,6 +331,5 @@ pub async fn getversionlist() -> Vec<String> {
             }
         }
     }
-
-    versionlist
+    Ok(versionlist)
 }

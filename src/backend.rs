@@ -19,130 +19,130 @@ pub async fn start(
     pdirectory: String,
 ) -> Result<(), String> {
     let result = std::panic::catch_unwind(|| {
+        let operationalsystem = std::env::consts::OS;
+        let player = player;
+        let mc_dir = match std::env::consts::OS {
+            "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
+            "windows" => format!(
+                "{}/AppData/Roaming/.minecraft",
+                std::env::var("USERPROFILE").unwrap().replace("\\", "/")
+            ),
+            _ => panic!("System not supported."),
+        };
 
+        println!("{}", &mc_dir);
+        let assets_dir = format!("{}/assets", &mc_dir);
+        let game_version = game_version;
+        let uuid = "9791bffa968538928aa0b3ff397fd54f";
 
-    let operationalsystem = std::env::consts::OS;
-    let player = player;
-    let mc_dir = match std::env::consts::OS {
-        "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
-        "windows" => format!(
-            "{}/AppData/Roaming/.minecraft",
-            std::env::var("USERPROFILE").unwrap().replace("\\", "/")
-        ),
-        _ => panic!("System not supported."),
-    };
+        let versionpath = format!("{}/versions/{}/{}.jar", &mc_dir, game_version, game_version);
 
-    println!("{}", &mc_dir);
-    let assets_dir = format!("{}/assets", &mc_dir);
-    let game_version = game_version;
-    let uuid = "9791bffa968538928aa0b3ff397fd54f";
-
-    let versionpath = format!("{}/versions/{}/{}.jar", &mc_dir, game_version, game_version);
-
-    let jpathstring = format!(
-        "{}/versions/{}/{}.json",
-        &mc_dir, game_version, game_version
-    );
-    let jsonpath = Path::new(&jpathstring);
-
-    let mut file = File::open(jsonpath).unwrap();
-    let mut fcontent = String::new();
-    file.read_to_string(&mut fcontent).unwrap();
-    let content = serde_json::from_str(&fcontent);
-
-    let p: Value = content.unwrap();
-    let mainclass = &p["mainClass"].as_str().unwrap();
-    let mut assetindex = p["assets"].to_string();
-    let nativedir = format!("{}/versions/{}/natives", &mc_dir, game_version);
-
-    let mut libraries_list = libmanager(&p, operationalsystem, &mc_dir);
-
-    if game_version.contains("fabric-loader") {
-        let vanillaversion = p["inheritsFrom"].as_str().unwrap();
-        let vanillaversionpathstring = format!(
-            "{}/versions/{}/{}.jar",
-            &mc_dir, vanillaversion, vanillaversion
-        );
-        let vanillajsonpathstring = format!(
+        let jpathstring = format!(
             "{}/versions/{}/{}.json",
-            &mc_dir, vanillaversion, vanillaversion
+            &mc_dir, game_version, game_version
         );
-        let vanillajsonfilepath = Path::new(&vanillajsonpathstring);
-        if vanillajsonfilepath.exists() == false {
-            println!("{} needs to be installed.", vanillaversion);
-            version_installer::installversion(vanillaversion.to_string()).unwrap();
+        let jsonpath = Path::new(&jpathstring);
 
-            fs::remove_file(&versionpath).unwrap();
-            let mut vanillaversionfile = File::open(&vanillaversionpathstring).unwrap();
-            let mut buffer = Vec::new();
-            vanillaversionfile.read_to_end(&mut buffer).unwrap();
-            let mut fabric_towrite = File::create(&versionpath).unwrap();
-            fabric_towrite.write_all(&buffer).unwrap();
+        let mut file = File::open(jsonpath).unwrap();
+        let mut fcontent = String::new();
+        file.read_to_string(&mut fcontent).unwrap();
+        let content = serde_json::from_str(&fcontent);
+
+        let p: Value = content.unwrap();
+        let mainclass = &p["mainClass"].as_str().unwrap();
+        let mut assetindex = p["assets"].to_string();
+        let nativedir = format!("{}/versions/{}/natives", &mc_dir, game_version);
+
+        let mut libraries_list = libmanager(&p, operationalsystem, &mc_dir);
+
+        if game_version.contains("fabric-loader") {
+            let vanillaversion = p["inheritsFrom"].as_str().unwrap();
+            let vanillaversionpathstring = format!(
+                "{}/versions/{}/{}.jar",
+                &mc_dir, vanillaversion, vanillaversion
+            );
+            let vanillajsonpathstring = format!(
+                "{}/versions/{}/{}.json",
+                &mc_dir, vanillaversion, vanillaversion
+            );
+            let vanillajsonfilepath = Path::new(&vanillajsonpathstring);
+            if vanillajsonfilepath.exists() == false {
+                println!("{} needs to be installed.", vanillaversion);
+                version_installer::installversion(vanillaversion.to_string()).unwrap();
+
+                fs::remove_file(&versionpath).unwrap();
+                let mut vanillaversionfile = File::open(&vanillaversionpathstring).unwrap();
+                let mut buffer = Vec::new();
+                vanillaversionfile.read_to_end(&mut buffer).unwrap();
+                let mut fabric_towrite = File::create(&versionpath).unwrap();
+                fabric_towrite.write_all(&buffer).unwrap();
+            }
+
+            let mut vanillajson = File::open(&vanillajsonpathstring).unwrap();
+
+            let mut vjsoncontent = String::new();
+            vanillajson.read_to_string(&mut vjsoncontent).unwrap();
+            let vjson: Value = serde_json::from_str(&vjsoncontent).unwrap();
+            libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
+            assetindex = vjson["assets"].to_string();
         }
+        assetindex = assetindex.replace("\"", "");
+        libraries_list.push_str(&format!(
+            "{}/versions/{}/{}.jar",
+            &mc_dir, game_version, game_version
+        ));
+        if pdirectory.is_empty() {
+            env::set_current_dir(&mc_dir).expect("Failed to open profile folder!");
+        } else {
+            fs::create_dir_all(&pdirectory).unwrap();
+            env::set_current_dir(&pdirectory).expect("Failed to open profile folder!");
+        }
+        let mut mineprogram = if gamemode {
+            Command::new("gamemoderun")
+        } else {
+            Command::new(jvm)
+        };
 
-        let mut vanillajson = File::open(&vanillajsonpathstring).unwrap();
+        if gamemode {
+            mineprogram.arg(jvm);
+        }
+        mineprogram
+            .arg(format!("-Xmx{}M", ram * 1024.))
+            .args(jvmargs)
+            .arg(format!("-Djava.library.path={}", nativedir))
+            .arg("-cp")
+            .arg(libraries_list)
+            .arg(mainclass)
+            .args([
+                "--username",
+                player,
+                "--version",
+                game_version,
+                "--accessToken",
+                "[pro]",
+                "--userProperties",
+                "{}",
+                "--gamedir",
+                &mc_dir,
+                "--assetsDir",
+                &assets_dir,
+                "--assetIndex",
+                &assetindex,
+                "--uuid",
+                uuid,
+                "--userType",
+                "legacy",
+            ]);
+        println!("{:?}", mineprogram);
+        mineprogram.spawn().expect("Failed to execute Minecraft!");
+    });
 
-        let mut vjsoncontent = String::new();
-        vanillajson.read_to_string(&mut vjsoncontent).unwrap();
-        let vjson: Value = serde_json::from_str(&vjsoncontent).unwrap();
-        libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
-        assetindex = vjson["assets"].to_string();
+    match result {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            Err("A panic occurred. Maybe there is something wrong with your options.".to_string())
+        }
     }
-    assetindex = assetindex.replace("\"", "");
-    libraries_list.push_str(&format!(
-        "{}/versions/{}/{}.jar",
-        &mc_dir, game_version, game_version
-    ));
-    if pdirectory.is_empty(){
-        env::set_current_dir(&mc_dir).expect("Failed to open profile folder!");
-    } else{
-    fs::create_dir_all(&pdirectory).unwrap();
-    env::set_current_dir(&pdirectory).expect("Failed to open profile folder!");
-    }
-    let mut mineprogram = if gamemode {
-        Command::new("gamemoderun")
-    } else {
-        Command::new(jvm)
-    };
-
-    if gamemode {
-        mineprogram.arg(jvm);
-    }
-    mineprogram
-        .arg(format!("-Xmx{}M", ram * 1024.))
-        .args(jvmargs)
-        .arg(format!("-Djava.library.path={}", nativedir))
-        .arg("-cp")
-        .arg(libraries_list)
-        .arg(mainclass)
-        .args([
-            "--username",
-            player,
-            "--version",
-            game_version,
-            "--accessToken",
-            "[pro]",
-            "--userProperties",
-            "{}",
-            "--gamedir",
-            &mc_dir,
-            "--assetsDir",
-            &assets_dir,
-            "--assetIndex",
-            &assetindex,
-            "--uuid",
-            uuid,
-            "--userType",
-            "legacy",
-        ]);
-    println!("{:?}", mineprogram);
-    mineprogram.spawn().expect("Failed to execute Minecraft!");
-});
-
-match result {
-    Ok(_) => Ok(()),
-    Err(_) => Err("A panic occurred. Maybe there is something wrong with your options.".to_string()),
-}
 }
 
 #[tokio::main]
