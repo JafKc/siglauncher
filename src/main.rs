@@ -1,5 +1,6 @@
 use iced::widget::{
-    button, column, container, pick_list, slider, svg, text, text_input, toggler, Row};
+    button, column, container, pick_list, slider, svg, text, text_input, toggler, Row,
+};
 use iced::{alignment, executor, window, Alignment, Application, Command, Length, Settings};
 use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
@@ -12,8 +13,6 @@ use std::path::Path;
 mod backend;
 mod theme;
 use self::widget::Element;
-
-
 
 #[derive(Serialize, Deserialize)]
 struct JVMs {
@@ -85,7 +84,7 @@ enum Message {
     UserChanged(String),
     VerChanged(String),
     LaunchPressed,
-    InstallPressed,
+    InstallationScreenButton,
     OptionsPressed,
     GithubPressed,
 
@@ -97,13 +96,13 @@ enum Message {
 
     RamChanged(f64),
     Apply,
-    Return,
+    Return(i8),
     JVMChanged(String),
     ProfileFChanged(String),
     GamemodeChanged(bool),
 
     InstallVersion,
-    Downloaded(()),
+    Downloaded(String),
 
     JVMname(String),
     JVMpath(String),
@@ -203,7 +202,7 @@ impl Application for Siglauncher {
                     let dprofilepath = dprofile[1].replace("\"", "");
 
                     self.state = String::from("Launching...");
-                    
+
                     Command::perform(
                         async move {
                             backend::start(
@@ -234,18 +233,23 @@ impl Application for Siglauncher {
             }
             Message::Launched(result) => {
                 println!("Backend finished.");
-                if result.is_ok(){
-                self.state = String::from("Launched.");
+                if result.is_ok() {
+                    self.state = String::from("Launched.");
                 } else {
                     self.state = result.err().unwrap();
                 }
                 Command::none()
             }
 
-            Message::InstallPressed => {
+            Message::InstallationScreenButton => {
                 self.screen = 2;
                 Command::perform(
-                    async move { backend::version_installer::getversionlist() },
+                    async move {
+                        match backend::version_installer::getversionlist() {
+                            Ok(a) => a,
+                            Err(_) => vec![],
+                        }
+                    },
                     Message::Gotlist,
                 )
             }
@@ -262,23 +266,31 @@ impl Application for Siglauncher {
                     self.ram,
                     self.currentjavaname.clone(),
                     self.currentprofilefolder.clone(),
-                    self.gamemodelinux.clone()
+                    self.gamemodelinux.clone(),
                 )
                 .unwrap();
                 self.screen = 1;
                 Command::none()
             }
-            Message::Return => {
+            Message::Return(s) => {
                 self.versions = backend::getinstalledversions();
-                self.screen = 1;
+                self.screen = s;
+                self.state.clear();
                 Command::none()
             }
 
             Message::Gotlist(a) => {
-                for i in a {
-                    let ii = i.replace("\"", "");
-                    self.downloadlist.push(ii);
+                if a.is_empty() {
+                    self.state = "Failed to get version list".to_string()
                 }
+
+                if self.downloadlist.is_empty() {
+                    for i in a {
+                        let ii = i.replace("\"", "");
+                        self.downloadlist.push(ii);
+                    }
+                }
+
                 Command::none()
             }
             Message::DownloadChanged(a) => {
@@ -286,14 +298,20 @@ impl Application for Siglauncher {
                 Command::none()
             }
             Message::InstallVersion => {
+                self.state = String::from("Downloading version...");
                 let ver = self.versiontodownload.clone().replace("\"", "");
                 Command::perform(
-                    async move { backend::version_installer::installversion(ver).unwrap_or(()) },
+                    async move {
+                        match backend::version_installer::installversion(ver) {
+                            Ok(()) => "Installed successfully".to_string(),
+                            Err(_) => "An error ocurred and version was not installed".to_string(),
+                        }
+                    },
                     Message::Downloaded,
                 )
             }
-            Message::Downloaded(_) => {
-                println!("Version installed successfully.");
+            Message::Downloaded(result) => {
+                self.state = result;
                 self.screen = 1;
                 Command::none()
             }
@@ -473,7 +491,7 @@ impl Application for Siglauncher {
             Message::GithubPressed => {
                 webbrowser::open("https://github.com/jafkc/siglauncher").unwrap();
                 Command::none()
-            },
+            }
         }
     }
     fn view(&self) -> Element<Message> {
@@ -506,7 +524,7 @@ impl Application for Siglauncher {
         let verinstallbutton = button(verinstalllabel)
             .width(250)
             .height(30)
-            .on_press(Message::InstallPressed)
+            .on_press(Message::InstallationScreenButton)
             .style(theme::Button::Secondary);
         let optionslabel = text("Options")
             .size(20)
@@ -590,7 +608,7 @@ impl Application for Siglauncher {
         let returnbutton = button(returntext)
             .width(135)
             .height(30)
-            .on_press(Message::Return);
+            .on_press(Message::Return(1));
         let mut orow = Row::new().spacing(50);
         orow = orow.push(returnbutton);
         orow = orow.push(applybutton);
@@ -627,7 +645,7 @@ impl Application for Siglauncher {
         let ireturnbutton = button(ireturntext)
             .width(250)
             .height(30)
-            .on_press(Message::Return);
+            .on_press(Message::Return(1));
         //java manager
         let jtitle = text("Add JVM")
             .size(50)
@@ -657,7 +675,7 @@ impl Application for Siglauncher {
         let jreturnbutton = button(jreturntext)
             .width(135)
             .height(30)
-            .on_press(Message::Return);
+            .on_press(Message::Return(3));
         let mut jrow = Row::new().spacing(50);
         jrow = jrow.push(jreturnbutton);
         jrow = jrow.push(addbutton);
@@ -686,13 +704,14 @@ impl Application for Siglauncher {
         let dreturnbutton = button(dreturntext)
             .width(135)
             .height(30)
-            .on_press(Message::Return);
+            .on_press(Message::Return(3));
         let mut drow = Row::new().spacing(50);
         drow = drow.push(dreturnbutton);
         drow = drow.push(daddbutton);
 
-
-        let state = text(&self.state).horizontal_alignment(alignment::Horizontal::Center).vertical_alignment(alignment::Vertical::Bottom);
+        let state = text(&self.state)
+            .horizontal_alignment(alignment::Horizontal::Center)
+            .vertical_alignment(alignment::Vertical::Bottom);
         let content;
         match self.screen {
             1 => {
@@ -782,8 +801,7 @@ fn checksettingsfile() {
             name: "Default".to_string(),
             path: String::new(),
         }];
-        let mut json =
-            serde_json::json!({"JVMs" : jvm, "Game profile folders": gamedirectories});
+        let mut json = serde_json::json!({"JVMs" : jvm, "Game profile folders": gamedirectories});
 
         if let Value::Object(map) = &mut json {
             map.insert(
@@ -859,7 +877,8 @@ fn updatesettingsfile(
 
     data["ram"] = serde_json::Value::Number(Number::from_f64(ram).unwrap());
     data["currentjavaname"] = serde_json::Value::String(currentjvm.replace("\"", ""));
-    data["currentprofilefolder"] = serde_json::Value::String(currentprofilefolder.replace("\"", ""));
+    data["currentprofilefolder"] =
+        serde_json::Value::String(currentprofilefolder.replace("\"", ""));
     data["gamemodelinux"] = serde_json::Value::Bool(gamemode);
 
     let serialized = serde_json::to_string_pretty(&data)?;
@@ -872,7 +891,6 @@ fn updatesettingsfile(
 
     Ok(())
 }
-
 
 mod widget {
     use crate::theme::Theme;
