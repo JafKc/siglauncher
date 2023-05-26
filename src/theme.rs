@@ -12,11 +12,7 @@ impl application::StyleSheet for Theme {
 
     fn appearance(&self, _style: &Self::Style) -> application::Appearance {
         application::Appearance {
-            background_color: Color::from_rgb(
-                0.1098039215686275,
-                0.1098039215686275,
-                0.1529411764705882,
-            ),
+            background_color: Color::from_rgb8(28, 28, 39),
             text_color: color!(0xeb, 0xdb, 0xb2),
         }
     }
