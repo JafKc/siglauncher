@@ -13,7 +13,7 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
         "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
         "windows" => format!(
             "{}/AppData/Roaming/.minecraft",
-            std::env::var("USERPROFILE").unwrap().replace("\\", "/")
+            std::env::var("USERPROFILE").unwrap().replace('\\', "/")
         ),
         _ => panic!("System not supported."),
     };
@@ -102,9 +102,8 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
                     let assetdir = format!("{}/assets/objects/", &mc_dir);
                     for (key, value) in assets.iter() {
                         if let Some(hash) = value["hash"].as_str() {
-                            if Path::new(&format!("{}/{}/{}", &assetdir, &hash[0..2], &hash))
+                            if !Path::new(&format!("{}/{}/{}", &assetdir, &hash[0..2], &hash))
                                 .exists()
-                                == false
                             {
                                 let a = assetdownloader
                                     .get(format!(
@@ -144,8 +143,8 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
                             || library["rules"][0]["os"]["name"].is_null()
                         {
                             let libraryname = library["name"].as_str().unwrap();
-                            let mut lpieces: Vec<&str> = libraryname.split(":").collect();
-                            let firstpiece = lpieces[0].replace(".", "/");
+                            let mut lpieces: Vec<&str> = libraryname.split(':').collect();
+                            let firstpiece = lpieces[0].replace('.', "/");
                             lpieces.remove(0);
 
                             if library["name"].as_str().unwrap().contains("natives") {
@@ -160,7 +159,7 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
                                     os
                                 );
 
-                                if Path::exists(Path::new(&libpath)) == false {
+                                if !Path::exists(Path::new(&libpath)) {
                                     println!("Downloading library to {}", &libpath);
                                     let libtodownload = reqwest::Client::new()
                                         .get(
@@ -176,7 +175,7 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
                                         .unwrap();
 
                                     let directorytocreate = Path::new(&libpath).parent().unwrap();
-                                    fs::create_dir_all(&directorytocreate).unwrap();
+                                    fs::create_dir_all(directorytocreate).unwrap();
                                     let mut newlib = File::create(&libpath).unwrap();
                                     newlib.write_all(&libtodownload).unwrap();
                                     println!("Downloaded successfully.");
@@ -193,7 +192,7 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
                                     &lpieces[&lpieces.len() - 1]
                                 );
 
-                                if Path::exists(Path::new(&libpath)) == false {
+                                if !Path::exists(Path::new(&libpath)) {
                                     println!("Downloading library to {}", &libpath);
                                     let libtodownload = reqwest::Client::new()
                                         .get(
@@ -209,7 +208,7 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
                                         .unwrap();
 
                                     let directorytocreate = Path::new(&libpath).parent().unwrap();
-                                    fs::create_dir_all(&directorytocreate).unwrap();
+                                    fs::create_dir_all(directorytocreate).unwrap();
                                     let mut newlib = File::create(&libpath).unwrap();
                                     newlib.write_all(&libtodownload).unwrap();
                                     println!("Downloaded successfully.");
@@ -227,8 +226,8 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
                                     os
                                 );
 
-                                if Path::exists(Path::new(&libpath)) == false {
-                                    if library["downloads"]["artifact"]["url"].is_null() == false {
+                                if !Path::exists(Path::new(&libpath)) {
+                                    if !library["downloads"]["artifact"]["url"].is_null() {
                                         println!("Downloading library to {}", &libpath);
                                         let libtodownload = reqwest::Client::new()
                                             .get(
@@ -245,7 +244,7 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
 
                                         let directorytocreate =
                                             Path::new(&libpath).parent().unwrap();
-                                        fs::create_dir_all(&directorytocreate).unwrap();
+                                        fs::create_dir_all(directorytocreate).unwrap();
                                         let mut newlib = File::create(&libpath).unwrap();
                                         newlib.write_all(&libtodownload).unwrap();
                                         println!("Downloaded successfully.");
@@ -256,8 +255,7 @@ pub async fn installversion(version: String) -> Result<(), reqwest::Error> {
                             }
                         }
 
-                        if library["downloads"]["classifiers"][format!("natives-{}", os)].is_null()
-                            == false
+                        if !library["downloads"]["classifiers"][format!("natives-{}", os)].is_null()
                         {
                             println!("Downloading native {}", library["name"]);
                             let versionnatives = reqwest::Client::new()

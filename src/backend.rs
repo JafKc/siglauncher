@@ -25,7 +25,7 @@ pub async fn start(
             "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
             "windows" => format!(
                 "{}/AppData/Roaming/.minecraft",
-                std::env::var("USERPROFILE").unwrap().replace("\\", "/")
+                std::env::var("USERPROFILE").unwrap().replace('\\', "/")
             ),
             _ => panic!("System not supported."),
         };
@@ -66,12 +66,12 @@ pub async fn start(
                 &mc_dir, vanillaversion, vanillaversion
             );
             let vanillajsonfilepath = Path::new(&vanillajsonpathstring);
-            if vanillajsonfilepath.exists() == false {
+            if !vanillajsonfilepath.exists() {
                 println!("{} needs to be installed.", vanillaversion);
                 version_installer::installversion(vanillaversion.to_string()).unwrap();
 
                 fs::remove_file(&versionpath).unwrap();
-                let mut vanillaversionfile = File::open(&vanillaversionpathstring).unwrap();
+                let mut vanillaversionfile = File::open(vanillaversionpathstring).unwrap();
                 let mut buffer = Vec::new();
                 vanillaversionfile.read_to_end(&mut buffer).unwrap();
                 let mut fabric_towrite = File::create(&versionpath).unwrap();
@@ -86,7 +86,7 @@ pub async fn start(
             libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
             assetindex = vjson["assets"].to_string();
         }
-        assetindex = assetindex.replace("\"", "");
+        assetindex = assetindex.replace('\"', "");
         libraries_list.push_str(&format!(
             "{}/versions/{}/{}.jar",
             &mc_dir, game_version, game_version
@@ -162,8 +162,8 @@ async fn libmanager(p: &Value, os: &str, mc_dir: &String) -> String {
                 || library["rules"][0]["os"]["name"].is_null()
             {
                 let libraryname = library["name"].as_str().unwrap();
-                let mut lpieces: Vec<&str> = libraryname.split(":").collect();
-                let firstpiece = lpieces[0].replace(".", "/");
+                let mut lpieces: Vec<&str> = libraryname.split(':').collect();
+                let firstpiece = lpieces[0].replace('.', "/");
                 lpieces.remove(0);
 
                 if library["name"].as_str().unwrap().contains("natives") {
@@ -210,7 +210,7 @@ async fn libmanager(p: &Value, os: &str, mc_dir: &String) -> String {
             }
         }
     }
-    return libraries_list;
+    libraries_list
 }
 
 pub fn getinstalledversions() -> Vec<String> {
@@ -218,16 +218,16 @@ pub fn getinstalledversions() -> Vec<String> {
         "linux" => format!("{}/.minecraft/versions", std::env::var("HOME").unwrap()),
         "windows" => format!(
             "{}/AppData/Roaming/.minecraft/versions",
-            std::env::var("USERPROFILE").unwrap().replace("\\", "/")
+            std::env::var("USERPROFILE").unwrap().replace('\\', "/")
         ),
         _ => panic!("System not supported."),
     };
-    if Path::new(&versions_dir).exists() == false {
+    if !Path::new(&versions_dir).exists() {
         fs::create_dir_all(&versions_dir).unwrap();
     }
     let entries = fs::read_dir(versions_dir).unwrap();
 
-    let versions = entries
+    entries
         .filter_map(|entry| {
             let path = entry.unwrap().path();
             if path.is_dir() {
@@ -236,7 +236,5 @@ pub fn getinstalledversions() -> Vec<String> {
                 None
             }
         })
-        .collect::<Vec<_>>();
-
-    versions
+        .collect::<Vec<_>>()
 }
