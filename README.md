@@ -48,5 +48,4 @@ For Fedora-based distros:
 dnf install gamemode
 ```
 
-#### State
-The program handles errors poorly, so it's common for the launcher to crash. Still WIP.
+
