@@ -55,7 +55,9 @@ pub async fn start(
 
         let mut libraries_list = libmanager(&p, operationalsystem, &mc_dir);
 
-        if game_version.contains("fabric-loader") {
+        if game_version.to_lowercase().contains("fabric-loader")
+            || game_version.to_lowercase().contains("forge")
+        {
             let vanillaversion = p["inheritsFrom"].as_str().unwrap();
             let vanillaversionpathstring = format!(
                 "{}/versions/{}/{}.jar",
@@ -69,13 +71,33 @@ pub async fn start(
             if !vanillajsonfilepath.exists() {
                 println!("{} needs to be installed.", vanillaversion);
                 version_installer::installversion(vanillaversion.to_string()).unwrap();
+            }
 
-                fs::remove_file(&versionpath).unwrap();
-                let mut vanillaversionfile = File::open(vanillaversionpathstring).unwrap();
-                let mut buffer = Vec::new();
-                vanillaversionfile.read_to_end(&mut buffer).unwrap();
-                let mut fabric_towrite = File::create(&versionpath).unwrap();
-                fabric_towrite.write_all(&buffer).unwrap();
+            let mut vanillaversionfile = File::open(vanillaversionpathstring).unwrap();
+            let mut buffer = Vec::new();
+            vanillaversionfile.read_to_end(&mut buffer).unwrap();
+            let mut modver_towrite = File::create(&versionpath).unwrap();
+            modver_towrite.write_all(&buffer).unwrap();
+
+            fs::create_dir_all(format!("{}/versions/{}/natives", &mc_dir, game_version)).unwrap();
+
+            if let Ok(vanillanatives) =
+                fs::read_dir(format!("{}/versions/{}/natives", &mc_dir, vanillaversion))
+            {
+                for i in vanillanatives {
+                    if !i.as_ref().unwrap().file_type().unwrap().is_dir() {
+                        fs::copy(
+                            i.as_ref().unwrap().path(),
+                            format!(
+                                "{}/versions/{}/natives/{}",
+                                &mc_dir,
+                                game_version,
+                                i.as_ref().unwrap().file_name().to_string_lossy()
+                            ),
+                        )
+                        .unwrap();
+                    }
+                }
             }
 
             let mut vanillajson = File::open(&vanillajsonpathstring).unwrap();
@@ -86,6 +108,31 @@ pub async fn start(
             libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
             assetindex = vjson["assets"].to_string();
         }
+
+        let isforge = game_version.to_lowercase().contains("forge");
+        let mut forgejvmargs: Vec<String> = vec![];
+        let mut forgegameargs: Vec<String> = vec![];
+        if isforge {
+            if !p["arguments"].is_null() {
+                if let Some(forgejvmarguments) = p["arguments"]["jvm"].as_array() {
+                    for i in forgejvmarguments {
+                        forgejvmargs.push(i.as_str().unwrap().to_string());
+                    }
+                };
+
+                if let Some(forgegamearguments) = p["arguments"]["game"].as_array() {
+                    for i in forgegamearguments {
+                        forgegameargs.push(i.as_str().unwrap().to_string());
+                    }
+                }
+            } else if !p["minecraftArguments"].is_null() {
+                forgegameargs.push(String::from("--tweakClass"));
+                forgegameargs.push(String::from(
+                    "net.minecraftforge.fml.common.launcher.FMLTweaker",
+                ))
+            }
+        }
+
         assetindex = assetindex.replace('\"', "");
         libraries_list.push_str(&format!(
             "{}/versions/{}/{}.jar",
@@ -111,28 +158,33 @@ pub async fn start(
             .args(jvmargs)
             .arg(format!("-Djava.library.path={}", nativedir))
             .arg("-cp")
-            .arg(libraries_list)
-            .arg(mainclass)
-            .args([
-                "--username",
-                player,
-                "--version",
-                game_version,
-                "--accessToken",
-                "[pro]",
-                "--userProperties",
-                "{}",
-                "--gamedir",
-                &mc_dir,
-                "--assetsDir",
-                &assets_dir,
-                "--assetIndex",
-                &assetindex,
-                "--uuid",
-                uuid,
-                "--userType",
-                "legacy",
-            ]);
+            .arg(libraries_list);
+        if isforge {
+            mineprogram.args(forgejvmargs);
+        }
+        mineprogram.arg(mainclass).args([
+            "--username",
+            player,
+            "--version",
+            game_version,
+            "--accessToken",
+            "[pro]",
+            "--userProperties",
+            "{}",
+            "--gameDir",
+            &mc_dir,
+            "--assetsDir",
+            &assets_dir,
+            "--assetIndex",
+            &assetindex,
+            "--uuid",
+            uuid,
+            "--userType",
+            "legacy",
+        ]);
+        if isforge {
+            mineprogram.args(forgegameargs);
+        }
         println!("{:?}", mineprogram);
         mineprogram.spawn().expect("Failed to execute Minecraft!");
     });
