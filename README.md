@@ -10,7 +10,7 @@ The launcher is compatible with Vanilla, Fabric, and Forge, and is designed to r
 * Game performance: optimized Java flags and Feral's Gamemode (Linux).
 * Works in offline mode.
 
-![image](https://github.com/JafKc/siglauncher/assets/109480612/48401a3d-0e08-4843-9f71-a75145661eea)
+![image](https://github.com/JafKc/siglauncher/assets/109480612/fcf86c91-48db-44c9-8600-16657e6d7b79)
 
 
 ### Installation
