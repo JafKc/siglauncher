@@ -1,5 +1,5 @@
 use iced::widget::{
-    button, column, container, pick_list, slider, svg, text, text_input, toggler, Row,
+    button, column, container, pick_list, row, slider, svg, text, text_input, toggler, Row,
 };
 use iced::{alignment, executor, window, Alignment, Application, Command, Length, Settings};
 use serde::{Deserialize, Serialize};
@@ -69,7 +69,7 @@ async fn main() -> iced::Result {
 
     Siglauncher::run(Settings {
         window: window::Settings {
-            size: (800, 500),
+            size: (800, 450),
 
             icon: Some(window::icon::from_file_data(icon, None).unwrap()),
 
@@ -84,9 +84,8 @@ enum Message {
     UserChanged(String),
     VerChanged(String),
     LaunchPressed,
-    InstallationScreenButton,
-    OptionsPressed,
     GithubPressed,
+    InstallationScreenButton,
 
     GoJavaMan,
     GoDprofileMan,
@@ -253,10 +252,7 @@ impl Application for Siglauncher {
                     Message::Gotlist,
                 )
             }
-            Message::OptionsPressed => {
-                self.screen = 3;
-                Command::none()
-            }
+
             Message::RamChanged(ram) => {
                 self.ram = ram;
                 Command::none()
@@ -495,53 +491,93 @@ impl Application for Siglauncher {
         }
     }
     fn view(&self) -> Element<Message> {
+        //sidebar
+        let homehandle = svg::Handle::from_memory(include_bytes!("icons/home.svg").as_slice());
+        let homesvg = svg(homehandle);
+        let homebutton = button(homesvg)
+            .on_press(Message::Return(1))
+            .style(theme::Button::Transparent)
+            .width(Length::Fixed(40.))
+            .height(Length::Fixed(40.));
+
+        let optionshandle =
+            svg::Handle::from_memory(include_bytes!("icons/options.svg").as_slice());
+        let optionssvg = svg(optionshandle);
+        let optionsbutton = button(optionssvg)
+            .on_press(Message::Return(3))
+            .style(theme::Button::Transparent)
+            .width(Length::Fixed(40.))
+            .height(Length::Fixed(40.));
+
+        let downloadhandle =
+            svg::Handle::from_memory(include_bytes!("icons/download.svg").as_slice());
+        let downloadsvg = svg(downloadhandle);
+        let downloadbutton = button(downloadsvg)
+            .on_press(Message::InstallationScreenButton)
+            .style(theme::Button::Transparent)
+            .width(Length::Fixed(40.))
+            .height(Length::Fixed(40.));
+
+        let profilehandle =
+            svg::Handle::from_memory(include_bytes!("icons/profile.svg").as_slice());
+        let profilesvg = svg(profilehandle);
+        let profilebutton = button(profilesvg)
+            .on_press(Message::Return(3))
+            .style(theme::Button::Transparent)
+            .width(Length::Fixed(40.))
+            .height(Length::Fixed(40.));
+
+        let githubhandlea = svg::Handle::from_memory(include_bytes!("icons/github.svg").as_slice());
+        let githubsvga = svg(githubhandlea)
+            .width(Length::Fixed(30.))
+            .height(Length::Fixed(30.));
+        let githubbuttona = button(githubsvga)
+            .on_press(Message::GithubPressed)
+            .style(theme::Button::Transparent);
+
+        let sidebar = column![
+            homebutton,
+            optionsbutton,
+            downloadbutton,
+            profilebutton,
+            githubbuttona,
+        ]
+        .spacing(25)
+        .align_items(Alignment::Center);
+        let containersidebar = container(sidebar)
+            .style(theme::Container::BlackContainer)
+            .align_x(alignment::Horizontal::Center)
+            .align_y(alignment::Vertical::Center)
+            .width(50)
+            .height(Length::Fill);
+
         //used in mainscreen
         let title = text("Siglauncher")
-            .size(50)
-            .horizontal_alignment(alignment::Horizontal::Center);
+            .size(65);
         let userinput = text_input("Username", &self.username)
             .on_input(Message::UserChanged)
             .size(25)
-            .width(250);
+            .width(285);
         let verpicker = pick_list(
             &self.versions,
             Some(format!("{:?}", &self.version.as_ref().unwrap())).map(|s| s.replace('\"', "")),
             Message::VerChanged,
         )
         .placeholder("Select a version")
-        .width(250)
+        .width(285)
         .text_size(25);
         let launchlabel = text("Launch")
-            .size(30)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let launchbutton = button(launchlabel)
-            .width(275)
-            .height(40)
-            .on_press(Message::LaunchPressed);
-        let verinstalllabel = text("Version installer")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let verinstallbutton = button(verinstalllabel)
-            .width(250)
-            .height(30)
-            .on_press(Message::InstallationScreenButton)
-            .style(theme::Button::Secondary);
-        let optionslabel = text("Options")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let optionsbutton = button(optionslabel)
-            .width(250)
-            .height(30)
-            .on_press(Message::OptionsPressed);
-        let githubhandle = svg::Handle::from_memory(include_bytes!("icons/github.svg").as_slice());
-        let githubsvg = svg(githubhandle)
-            .width(Length::Fixed(30.))
-            .height(Length::Fixed(30.));
-        let githubbutton = button(githubsvg).on_press(Message::GithubPressed);
-        //options
-        let otitle = text("Options")
             .size(50)
             .horizontal_alignment(alignment::Horizontal::Center);
+        let launchbutton = button(launchlabel)
+            .width(285)
+            .height(60)
+            .on_press(Message::LaunchPressed);
+        
+        
+        //options
+        let otitle = text("Options")
+            .size(50);
         let javaoptions = column![
             text("JVM:").horizontal_alignment(alignment::Horizontal::Center),
             pick_list(
@@ -552,7 +588,7 @@ impl Application for Siglauncher {
             .width(250)
             .text_size(25),
             button(
-                text("Manage JVMS")
+                text("Manage JVMs")
                     .size(20)
                     .width(250)
                     .horizontal_alignment(alignment::Horizontal::Center)
@@ -585,9 +621,7 @@ impl Application for Siglauncher {
         .spacing(10)
         .max_width(800)
         .align_items(Alignment::Center);
-        let mut java_dprofiles_row = Row::new().spacing(50);
-        java_dprofiles_row = java_dprofiles_row.push(javaoptions);
-        java_dprofiles_row = java_dprofiles_row.push(profilefolderoptions);
+
 
         let ramslider = slider(0.5..=16.0, self.ram, Message::RamChanged)
             .width(250)
@@ -602,16 +636,7 @@ impl Application for Siglauncher {
             .width(135)
             .height(30)
             .on_press(Message::Apply);
-        let returntext = text("Return")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let returnbutton = button(returntext)
-            .width(135)
-            .height(30)
-            .on_press(Message::Return(1));
-        let mut orow = Row::new().spacing(50);
-        orow = orow.push(returnbutton);
-        orow = orow.push(applybutton);
+        
         let gamemodetext = text("Use Feral's GameMode (Linux only)")
             .horizontal_alignment(alignment::Horizontal::Center);
         let gamemode = toggler(String::new(), self.gamemodelinux, Message::GamemodeChanged)
@@ -622,8 +647,7 @@ impl Application for Siglauncher {
 
         //installer
         let ititle = text("Version installer")
-            .size(50)
-            .horizontal_alignment(alignment::Horizontal::Center);
+            .size(50);
         let installpicker = pick_list(
             self.downloadlist.clone(),
             Some(format!("{:?}", &self.versiontodownload)).map(|s| s.replace('\"', "")),
@@ -638,14 +662,9 @@ impl Application for Siglauncher {
         let installbutton = button(installlabel)
             .width(250)
             .height(40)
-            .on_press(Message::InstallVersion);
-        let ireturntext = text("Return")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let ireturnbutton = button(ireturntext)
-            .width(250)
-            .height(30)
-            .on_press(Message::Return(1));
+            .on_press(Message::InstallVersion)
+            .style(theme::Button::Secondary);
+        
         //java manager
         let jtitle = text("Add JVM")
             .size(50)
@@ -676,7 +695,7 @@ impl Application for Siglauncher {
             .width(135)
             .height(30)
             .on_press(Message::Return(3));
-        let mut jrow = Row::new().spacing(50);
+        let mut jrow = Row::new().spacing(25);
         jrow = jrow.push(jreturnbutton);
         jrow = jrow.push(addbutton);
         //directorymanager
@@ -705,7 +724,7 @@ impl Application for Siglauncher {
             .width(135)
             .height(30)
             .on_press(Message::Return(3));
-        let mut drow = Row::new().spacing(50);
+        let mut drow = Row::new().spacing(25);
         drow = drow.push(dreturnbutton);
         drow = drow.push(daddbutton);
 
@@ -713,58 +732,68 @@ impl Application for Siglauncher {
             .horizontal_alignment(alignment::Horizontal::Center)
             .vertical_alignment(alignment::Vertical::Bottom);
         let content = match self.screen {
-            1 => column![
-                title,
-                column![text("Username:"), userinput, text("Version:"), verpicker].spacing(5),
-                launchbutton,
-                optionsbutton,
-                verinstallbutton,
-                githubbutton,
-                state
-            ]
-            .spacing(15)
-            .max_width(800)
-            .align_items(Alignment::Center),
-            2 => column![ititle, installpicker, installbutton, ireturnbutton, state]
-                .spacing(15)
-                .max_width(800)
-                .align_items(Alignment::Center),
-            3 => column![otitle, java_dprofiles_row, ramlabel, ramslider, grow, orow,]
+            1 => row![
+                containersidebar,
+                
+                column![
+                    column![
+                    title,
+                    text(format!("Hello {}!", self.username)).style(theme::Text::Peach)].spacing(5),
+                    column![text("Username:"), userinput, text("Version:"), verpicker].spacing(10),
+                    launchbutton,
+                    state
+                ]
                 .spacing(25)
                 .max_width(800)
-                .align_items(Alignment::Center),
-            4 => column![
-                jtitle,
-                text("JVM name:"),
-                anameinput,
-                text("JVM path:"),
-                apathinput,
-                text("JVM flags:"),
-                aflagsinput,
-                jrow,
             ]
-            .spacing(15)
-            .max_width(800)
-            .align_items(Alignment::Center),
-            5 => column![
-                dtitle,
-                text("Directory profile name:"),
-                dnameinput,
-                text("Directory profile path:"),
-                dpathinput,
-                drow,
+            .spacing(65),
+            2 => row![
+                containersidebar,
+                column![ititle, installpicker, installbutton, state]
+                    .spacing(15)
+                    .max_width(800)
+            ].spacing(65),
+            3 => row![
+                containersidebar,
+                column![otitle, row![container(column![javaoptions, profilefolderoptions].spacing(10)).style(theme::Container::BlackContainer).padding(10), container(column![column![ramlabel, ramslider], grow].spacing(50)).style(theme::Container::BlackContainer).padding(10)].spacing(15),  applybutton,]
+                    .spacing(25)
+                    .max_width(800)
             ]
-            .spacing(15)
-            .max_width(800)
-            .align_items(Alignment::Center),
+            .spacing(65),
+            4 => row![
+                containersidebar,
+                column![
+                    jtitle,
+                    text("JVM name:"),
+                    anameinput,
+                    text("JVM path:"),
+                    apathinput,
+                    text("JVM flags:"),
+                    aflagsinput,
+                    jrow,
+                ]
+                .spacing(15)
+                .max_width(800)
+            ]
+            .spacing(65),
+            5 => row![
+                containersidebar,
+                column![
+                    dtitle,
+                    text("Directory profile name:"),
+                    dnameinput,
+                    text("Directory profile path:"),
+                    dpathinput,
+                    drow,
+                ]
+                .spacing(15)
+                .max_width(800)
+            ]
+            .spacing(65),
             _ => panic!("Crashed"),
         };
 
-        container(content)
-            .width(Length::Fill)
-            .padding(20)
-            .center_x()
-            .into()
+        container(content).width(Length::Fill).height(Length::Fill).align_y(alignment::Vertical::Center).padding(20).into()
     }
 }
 
@@ -783,7 +812,7 @@ fn checksettingsfile() {
         };
 
         let jvm = vec![
-            JVMs{name:"Default".to_string(),path:"java".to_string(),flags:"-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=16M".to_string()}
+            JVMs{name:"Default".to_string(),path:"java".to_string(),flags:"-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3".to_string()}
         ];
 
         let gamedirectories = vec![GameWorkingDirectory {
