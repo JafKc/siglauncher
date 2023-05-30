@@ -552,8 +552,7 @@ impl Application for Siglauncher {
             .height(Length::Fill);
 
         //used in mainscreen
-        let title = text("Siglauncher")
-            .size(65);
+        let title = text("Siglauncher").size(65);
         let userinput = text_input("Username", &self.username)
             .on_input(Message::UserChanged)
             .size(25)
@@ -573,11 +572,9 @@ impl Application for Siglauncher {
             .width(285)
             .height(60)
             .on_press(Message::LaunchPressed);
-        
-        
+
         //options
-        let otitle = text("Options")
-            .size(50);
+        let otitle = text("Options").size(50);
         let javaoptions = column![
             text("JVM:").horizontal_alignment(alignment::Horizontal::Center),
             pick_list(
@@ -622,7 +619,6 @@ impl Application for Siglauncher {
         .max_width(800)
         .align_items(Alignment::Center);
 
-
         let ramslider = slider(0.5..=16.0, self.ram, Message::RamChanged)
             .width(250)
             .step(0.5);
@@ -636,7 +632,7 @@ impl Application for Siglauncher {
             .width(135)
             .height(30)
             .on_press(Message::Apply);
-        
+
         let gamemodetext = text("Use Feral's GameMode (Linux only)")
             .horizontal_alignment(alignment::Horizontal::Center);
         let gamemode = toggler(String::new(), self.gamemodelinux, Message::GamemodeChanged)
@@ -646,8 +642,7 @@ impl Application for Siglauncher {
         grow = grow.push(gamemodetext);
 
         //installer
-        let ititle = text("Version installer")
-            .size(50);
+        let ititle = text("Version installer").size(50);
         let installpicker = pick_list(
             self.downloadlist.clone(),
             Some(format!("{:?}", &self.versiontodownload)).map(|s| s.replace('\"', "")),
@@ -664,7 +659,7 @@ impl Application for Siglauncher {
             .height(40)
             .on_press(Message::InstallVersion)
             .style(theme::Button::Secondary);
-        
+
         //java manager
         let jtitle = text("Add JVM")
             .size(50)
@@ -734,11 +729,12 @@ impl Application for Siglauncher {
         let content = match self.screen {
             1 => row![
                 containersidebar,
-                
                 column![
                     column![
-                    title,
-                    text(format!("Hello {}!", self.username)).style(theme::Text::Peach)].spacing(5),
+                        title,
+                        text(format!("Hello {}!", self.username)).style(theme::Text::Peach)
+                    ]
+                    .spacing(5),
                     column![text("Username:"), userinput, text("Version:"), verpicker].spacing(10),
                     launchbutton,
                     state
@@ -752,12 +748,25 @@ impl Application for Siglauncher {
                 column![ititle, installpicker, installbutton, state]
                     .spacing(15)
                     .max_width(800)
-            ].spacing(65),
+            ]
+            .spacing(65),
             3 => row![
                 containersidebar,
-                column![otitle, row![container(column![javaoptions, profilefolderoptions].spacing(10)).style(theme::Container::BlackContainer).padding(10), container(column![column![ramlabel, ramslider], grow].spacing(50)).style(theme::Container::BlackContainer).padding(10)].spacing(15),  applybutton,]
-                    .spacing(25)
-                    .max_width(800)
+                column![
+                    otitle,
+                    row![
+                        container(column![javaoptions, profilefolderoptions].spacing(10))
+                            .style(theme::Container::BlackContainer)
+                            .padding(10),
+                        container(column![column![ramlabel, ramslider], grow].spacing(50))
+                            .style(theme::Container::BlackContainer)
+                            .padding(10)
+                    ]
+                    .spacing(15),
+                    applybutton,
+                ]
+                .spacing(25)
+                .max_width(800)
             ]
             .spacing(65),
             4 => row![
@@ -793,7 +802,12 @@ impl Application for Siglauncher {
             _ => panic!("Crashed"),
         };
 
-        container(content).width(Length::Fill).height(Length::Fill).align_y(alignment::Vertical::Center).padding(20).into()
+        container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_y(alignment::Vertical::Center)
+            .padding(20)
+            .into()
     }
 }
 
