@@ -29,12 +29,12 @@ impl text::StyleSheet for Theme {
 
     fn appearance(&self, style: Self::Style) -> text::Appearance {
         match style {
-        Text::Default => text::Appearance {
-            color: color!(205, 214, 244).into(),
-        },
-        Text::Peach => text::Appearance {
-            color: color!(250, 179, 135).into(),
-        },
+            Text::Default => text::Appearance {
+                color: color!(205, 214, 244).into(),
+            },
+            Text::Peach => text::Appearance {
+                color: color!(250, 179, 135).into(),
+            },
         }
     }
 }
