@@ -172,7 +172,7 @@ pub async fn start(
             "--userProperties",
             "{}",
             "--gameDir",
-            &mc_dir,
+            &pdirectory,
             "--assetsDir",
             &assets_dir,
             "--assetIndex",
