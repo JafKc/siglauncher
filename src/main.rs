@@ -1,5 +1,5 @@
 use iced::widget::{
-    button, column, container, pick_list, row, slider, svg, text, text_input, toggler, Row,
+    button, column, container, pick_list, row, slider, svg, text, text_input, toggler,
 };
 use iced::{alignment, executor, window, Alignment, Application, Command, Length, Settings};
 use serde::{Deserialize, Serialize};
@@ -551,258 +551,255 @@ impl Application for Siglauncher {
             .width(50)
             .height(Length::Fill);
 
-        //used in mainscreen
-        let title = text("Siglauncher").size(65);
-        let userinput = text_input("Username", &self.username)
-            .on_input(Message::UserChanged)
-            .size(25)
-            .width(285);
-        let verpicker = pick_list(
-            &self.versions,
-            Some(format!("{:?}", &self.version.as_ref().unwrap())).map(|s| s.replace('\"', "")),
-            Message::VerChanged,
-        )
-        .placeholder("Select a version")
-        .width(285)
-        .text_size(25);
-        let launchlabel = text("Launch")
-            .size(50)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let launchbutton = button(launchlabel)
-            .width(285)
-            .height(60)
-            .on_press(Message::LaunchPressed);
-
-        //options
-        let otitle = text("Options").size(50);
-        let javaoptions = column![
-            text("JVM:").horizontal_alignment(alignment::Horizontal::Center),
-            pick_list(
-                &self.jvms,
-                Some(&self.currentjavaname).map(|s| s.replace('\"', "")),
-                Message::JVMChanged
-            )
-            .width(250)
-            .text_size(25),
-            button(
-                text("Manage JVMs")
-                    .size(20)
-                    .width(250)
-                    .horizontal_alignment(alignment::Horizontal::Center)
-            )
-            .height(30)
-            .on_press(Message::GoJavaMan)
-        ]
-        .spacing(10)
-        .max_width(800)
-        .align_items(Alignment::Center);
-
-        let profilefolderoptions = column![
-            text("Profile folder:").horizontal_alignment(alignment::Horizontal::Center),
-            pick_list(
-                &self.pdirectories,
-                Some(&self.currentprofilefolder).map(|s| s.replace('\"', "")),
-                Message::ProfileFChanged
-            )
-            .width(250)
-            .text_size(25),
-            button(
-                text("Manage profile folders")
-                    .size(20)
-                    .width(250)
-                    .horizontal_alignment(alignment::Horizontal::Center)
-            )
-            .height(30)
-            .on_press(Message::GoDprofileMan)
-        ]
-        .spacing(10)
-        .max_width(800)
-        .align_items(Alignment::Center);
-
-        let ramslider = slider(0.5..=16.0, self.ram, Message::RamChanged)
-            .width(250)
-            .step(0.5);
-        let ramlabel = text(format!("Allocated memory: {}GiB", self.ram))
-            .size(30)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let applytext = text("Save")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let applybutton = button(applytext)
-            .width(135)
-            .height(30)
-            .on_press(Message::Apply);
-
-        let gamemodetext = text("Use Feral's GameMode (Linux only)")
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let gamemode = toggler(String::new(), self.gamemodelinux, Message::GamemodeChanged)
-            .width(Length::Shrink);
-        let mut grow = Row::new().spacing(10);
-        grow = grow.push(gamemode);
-        grow = grow.push(gamemodetext);
-
-        //installer
-        let ititle = text("Version installer").size(50);
-        let installpicker = pick_list(
-            self.downloadlist.clone(),
-            Some(format!("{:?}", &self.versiontodownload)).map(|s| s.replace('\"', "")),
-            Message::DownloadChanged,
-        )
-        .placeholder("Select a version")
-        .width(250)
-        .text_size(25);
-        let installlabel = text("Install")
-            .size(30)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let installbutton = button(installlabel)
-            .width(250)
-            .height(40)
-            .on_press(Message::InstallVersion)
-            .style(theme::Button::Secondary);
-
-        //java manager
-        let jtitle = text("Add JVM")
-            .size(50)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let anameinput = text_input("", &self.jvmaddname)
-            .on_input(Message::JVMname)
-            .size(25)
-            .width(250);
-        let apathinput = text_input("", &self.jvmaddpath)
-            .on_input(Message::JVMpath)
-            .size(25)
-            .width(250);
-        let aflagsinput = text_input("", &self.jvmaddflags)
-            .on_input(Message::JVMflags)
-            .size(25)
-            .width(250);
-        let addtext = text("Add")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let addbutton = button(addtext)
-            .width(135)
-            .height(30)
-            .on_press(Message::AddJVM);
-        let jreturntext = text("Return")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let jreturnbutton = button(jreturntext)
-            .width(135)
-            .height(30)
-            .on_press(Message::Return(3));
-        let mut jrow = Row::new().spacing(25);
-        jrow = jrow.push(jreturnbutton);
-        jrow = jrow.push(addbutton);
-        //directorymanager
-        let dtitle = text("Add Directory")
-            .size(50)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let dnameinput = text_input("", &self.daddname)
-            .on_input(Message::Directoryname)
-            .size(25)
-            .width(250);
-        let dpathinput = text_input("", &self.daddpath)
-            .on_input(Message::Directorypath)
-            .size(25)
-            .width(250);
-        let daddtext = text("Add")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let daddbutton = button(daddtext)
-            .width(135)
-            .height(30)
-            .on_press(Message::AddDirectory);
-        let dreturntext = text("Return")
-            .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center);
-        let dreturnbutton = button(dreturntext)
-            .width(135)
-            .height(30)
-            .on_press(Message::Return(3));
-        let mut drow = Row::new().spacing(25);
-        drow = drow.push(dreturnbutton);
-        drow = drow.push(daddbutton);
-
         let state = text(&self.state)
             .horizontal_alignment(alignment::Horizontal::Center)
             .vertical_alignment(alignment::Vertical::Bottom);
+
         let content = match self.screen {
-            1 => row![
-                containersidebar,
+            1 => column![
+                //mainscreen
+                //title
                 column![
-                    column![
-                        title,
-                        text(format!("Hello {}!", self.username)).style(theme::Text::Peach)
-                    ]
-                    .spacing(5),
-                    column![text("Username:"), userinput, text("Version:"), verpicker].spacing(10),
-                    launchbutton,
-                    state
+                    text("Siglauncher").size(65),
+                    text(format!("Hello {}!", self.username)).style(theme::Text::Peach)
                 ]
-                .spacing(25)
-                .max_width(800)
-            ]
-            .spacing(65),
-            2 => row![
-                containersidebar,
-                column![ititle, installpicker, installbutton, state]
-                    .spacing(15)
-                    .max_width(800)
-            ]
-            .spacing(65),
-            3 => row![
-                containersidebar,
+                .spacing(5),
+                //username and version input
                 column![
-                    otitle,
-                    row![
-                        container(column![javaoptions, profilefolderoptions].spacing(10))
-                            .style(theme::Container::BlackContainer)
-                            .padding(10),
-                        container(column![column![ramlabel, ramslider], grow].spacing(50))
-                            .style(theme::Container::BlackContainer)
-                            .padding(10)
-                    ]
-                    .spacing(15),
-                    applybutton,
+                    text("Username:"),
+                    text_input("Username", &self.username)
+                        .on_input(Message::UserChanged)
+                        .size(25)
+                        .width(285),
+                    text("Version:"),
+                    pick_list(
+                        &self.versions,
+                        Some(format!("{:?}", &self.version.as_ref().unwrap()))
+                            .map(|s| s.replace('\"', "")),
+                        Message::VerChanged,
+                    )
+                    .placeholder("Select a version")
+                    .width(285)
+                    .text_size(25)
                 ]
-                .spacing(25)
-                .max_width(800)
+                .spacing(10),
+                //launchbutton
+                button(
+                    text("Launch")
+                        .size(50)
+                        .horizontal_alignment(alignment::Horizontal::Center)
+                )
+                .width(285)
+                .height(60)
+                .on_press(Message::LaunchPressed),
+                state
             ]
-            .spacing(65),
-            4 => row![
-                containersidebar,
-                column![
-                    jtitle,
-                    text("JVM name:"),
-                    anameinput,
-                    text("JVM path:"),
-                    apathinput,
-                    text("JVM flags:"),
-                    aflagsinput,
-                    jrow,
+            .spacing(25)
+            .max_width(800),
+            2 => column![
+                //installerscreen
+                //title
+                text("Version installer").size(50),
+                //versionselector
+                pick_list(
+                    self.downloadlist.clone(),
+                    Some(format!("{:?}", &self.versiontodownload)).map(|s| s.replace('\"', "")),
+                    Message::DownloadChanged,
+                )
+                .placeholder("Select a version")
+                .width(250)
+                .text_size(25),
+                //installbutton
+                button(
+                    text("Install")
+                        .size(30)
+                        .horizontal_alignment(alignment::Horizontal::Center)
+                )
+                .width(250)
+                .height(40)
+                .on_press(Message::InstallVersion)
+                .style(theme::Button::Secondary),
+                state
+            ]
+            .spacing(15)
+            .max_width(800),
+
+            3 => column![
+                //optionsscreen
+                //title
+                text("Options").size(50),
+                //jvm and profile management
+                row![
+                    container(
+                        column![
+                            column![
+                                text("JVM:").horizontal_alignment(alignment::Horizontal::Center),
+                                pick_list(
+                                    &self.jvms,
+                                    Some(&self.currentjavaname).map(|s| s.replace('\"', "")),
+                                    Message::JVMChanged
+                                )
+                                .width(250)
+                                .text_size(25),
+                                button(
+                                    text("Manage JVMs")
+                                        .size(20)
+                                        .width(250)
+                                        .horizontal_alignment(alignment::Horizontal::Center)
+                                )
+                                .height(30)
+                                .on_press(Message::GoJavaMan)
+                            ]
+                            .spacing(10)
+                            .max_width(800)
+                            .align_items(Alignment::Center),
+                            column![
+                                text("Profile folder:")
+                                    .horizontal_alignment(alignment::Horizontal::Center),
+                                pick_list(
+                                    &self.pdirectories,
+                                    Some(&self.currentprofilefolder).map(|s| s.replace('\"', "")),
+                                    Message::ProfileFChanged
+                                )
+                                .width(250)
+                                .text_size(25),
+                                button(
+                                    text("Manage profile folders")
+                                        .size(20)
+                                        .width(250)
+                                        .horizontal_alignment(alignment::Horizontal::Center)
+                                )
+                                .height(30)
+                                .on_press(Message::GoDprofileMan)
+                            ]
+                            .spacing(10)
+                            .max_width(800)
+                            .align_items(Alignment::Center)
+                        ]
+                        .spacing(10)
+                    )
+                    .style(theme::Container::BlackContainer)
+                    .padding(10),
+                    //memory and gamemode
+                    container(
+                        column![
+                            column![
+                                text(format!("Allocated memory: {}GiB", self.ram))
+                                    .size(30)
+                                    .horizontal_alignment(alignment::Horizontal::Center),
+                                slider(0.5..=16.0, self.ram, Message::RamChanged)
+                                    .width(250)
+                                    .step(0.5)
+                            ],
+                            row![
+                                text("Use Feral's GameMode (Linux only)")
+                                    .horizontal_alignment(alignment::Horizontal::Center),
+                                toggler(
+                                    String::new(),
+                                    self.gamemodelinux,
+                                    Message::GamemodeChanged
+                                )
+                                .width(Length::Shrink)
+                            ]
+                            .spacing(10)
+                        ]
+                        .spacing(50)
+                    )
+                    .style(theme::Container::BlackContainer)
+                    .padding(10)
                 ]
-                .spacing(15)
-                .max_width(800)
+                .spacing(15),
+                //savebutton
+                button(
+                    text("Save")
+                        .size(20)
+                        .horizontal_alignment(alignment::Horizontal::Center)
+                )
+                .width(135)
+                .height(30)
+                .on_press(Message::Apply)
             ]
-            .spacing(65),
-            5 => row![
-                containersidebar,
-                column![
-                    dtitle,
-                    text("Directory profile name:"),
-                    dnameinput,
-                    text("Directory profile path:"),
-                    dpathinput,
-                    drow,
-                ]
-                .spacing(15)
-                .max_width(800)
+            .spacing(15)
+            .max_width(800),
+
+            4 => column![
+                text("Add JVM")
+                    .size(50)
+                    .horizontal_alignment(alignment::Horizontal::Center),
+                text("JVM name:"),
+                text_input("", &self.jvmaddname)
+                    .on_input(Message::JVMname)
+                    .size(25)
+                    .width(250),
+                text("JVM path:"),
+                text_input("", &self.jvmaddpath)
+                    .on_input(Message::JVMpath)
+                    .size(25)
+                    .width(250),
+                text("JVM flags:"),
+                text_input("", &self.jvmaddflags)
+                    .on_input(Message::JVMflags)
+                    .size(25)
+                    .width(250),
+                row![button(
+                    text("Return")
+                        .size(20)
+                        .horizontal_alignment(alignment::Horizontal::Center)
+                )
+                .width(135)
+                .height(30)
+                .on_press(Message::Return(3)),]
+                .spacing(25),
+                button(
+                    text("Add")
+                        .size(20)
+                        .horizontal_alignment(alignment::Horizontal::Center)
+                )
+                .width(135)
+                .height(30)
+                .on_press(Message::AddJVM)
             ]
-            .spacing(65),
+            .spacing(15)
+            .max_width(800),
+            5 => column![
+                text("Add Directory")
+                    .size(50)
+                    .horizontal_alignment(alignment::Horizontal::Center),
+                text("Directory profile name:"),
+                text_input("", &self.daddname)
+                    .on_input(Message::Directoryname)
+                    .size(25)
+                    .width(250),
+                text("Directory profile path:"),
+                text_input("", &self.daddpath)
+                    .on_input(Message::Directorypath)
+                    .size(25)
+                    .width(250),
+                row![button(
+                    text("Return")
+                        .size(20)
+                        .horizontal_alignment(alignment::Horizontal::Center)
+                )
+                .width(135)
+                .height(30)
+                .on_press(Message::Return(3)),]
+                .spacing(25),
+                button(
+                    text("Add")
+                        .size(20)
+                        .horizontal_alignment(alignment::Horizontal::Center)
+                )
+                .width(135)
+                .height(30)
+                .on_press(Message::AddDirectory)
+            ]
+            .spacing(15)
+            .max_width(800),
+
             _ => panic!("Crashed"),
         };
 
-        container(content)
+        container(row![containersidebar, content].spacing(65))
             .width(Length::Fill)
             .height(Length::Fill)
             .align_y(alignment::Vertical::Center)
