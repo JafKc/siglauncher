@@ -200,6 +200,8 @@ impl Application for Siglauncher {
                     println!("{}", dprofile[1]);
                     let dprofilepath = dprofile[1].replace('\"', "");
 
+                    let autojava = self.currentjavaname == *"\"Automatic\"";
+
                     self.state = String::from("Launching...");
 
                     Command::perform(
@@ -212,6 +214,7 @@ impl Application for Siglauncher {
                                 ram,
                                 gamemode,
                                 dprofilepath,
+                                autojava,
                             )
                             .await
                         },
@@ -522,7 +525,6 @@ impl Application for Siglauncher {
             svg::Handle::from_memory(include_bytes!("icons/profile.svg").as_slice());
         let profilesvg = svg(profilehandle);
         let profilebutton = button(profilesvg)
-            .on_press(Message::Return(3))
             .style(theme::Button::Transparent)
             .width(Length::Fixed(40.))
             .height(Length::Fixed(40.));
@@ -816,14 +818,15 @@ fn checksettingsfile() {
             username: "Player".to_string(),
             version: Some(String::new()),
             ram: 2.5,
-            currentjavaname: "Default".to_string(),
+            currentjavaname: "Automatic".to_string(),
             gamemodelinux: false,
             currentprofilefolder: "Default".to_string(),
             ..Default::default()
         };
 
         let jvm = vec![
-            JVMs{name:"Default".to_string(),path:"java".to_string(),flags:"-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3".to_string()}
+            JVMs{name: "Automatic".to_string(), path: String::new(), flags: String::new()},
+            JVMs{name:"System Java".to_string(),path:"java".to_string(),flags:"-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3".to_string()}
         ];
 
         let gamedirectories = vec![GameWorkingDirectory {

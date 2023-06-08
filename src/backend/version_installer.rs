@@ -1,3 +1,4 @@
+use reqwest::Client;
 use serde_json::Value;
 use std::{
     fs::{self, File},
@@ -330,4 +331,58 @@ pub async fn getversionlist() -> Result<Vec<String>, Box<dyn std::error::Error>>
         }
     }
     Ok(versionlist)
+}
+#[tokio::main]
+pub async fn downloadjava(new: bool) -> Result<(), reqwest::Error> {
+    let client = Client::new();
+
+    match std::env::consts::OS {
+        "linux" => {
+            let foldertostore = &format!("{}/.minecraft/java", std::env::var("HOME").unwrap());
+            let url = if new {
+                "https://raw.githubusercontent.com/JafKc/siglauncher-jvm/main/binaries/java17-linux.zip"
+            } else {
+                "https://raw.githubusercontent.com/JafKc/siglauncher-jvm/main/binaries/java8-linux.zip"
+            };
+
+            let download = client
+                .get(url)
+                .header("User-Agent", "Siglauncher")
+                .send()
+                .await?
+                .bytes()
+                .await?;
+
+            fs::create_dir_all(foldertostore).unwrap();
+            let mut compressed =
+                File::create(format!("{}/compressedjava.zip", foldertostore)).unwrap();
+            compressed.write_all(&download).unwrap();
+            let compressed = File::open(format!("{}/compressedjava.zip", foldertostore)).unwrap();
+
+            let mut archive = ZipArchive::new(BufReader::new(compressed)).unwrap();
+
+            for i in 0..archive.len() {
+                let mut file = archive.by_index(i).unwrap();
+                let outpath = format!(
+                    "{}/{}",
+                    &foldertostore,
+                    file.mangled_name().to_string_lossy()
+                );
+                if file.is_dir() {
+                    println!("Creating directory: {:?}", outpath);
+                    std::fs::create_dir_all(&outpath).unwrap();
+                } else {
+                    println!("Extracting file: {:?}", outpath);
+                    let mut outfile = File::create(&outpath).unwrap();
+                    std::io::copy(&mut file, &mut outfile).unwrap();
+                }
+            }
+            fs::remove_file(format!("{}/compressedjava.zip", foldertostore)).unwrap();
+            println!("Java was installed successfully.");
+        }
+
+        "windows" => todo!(),
+        _ => panic!("System not supported."),
+    }
+    Ok(())
 }

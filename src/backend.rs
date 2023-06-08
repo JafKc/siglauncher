@@ -3,9 +3,12 @@ use std::{
     env::{self},
     fs::{self, File},
     io::{Read, Write},
+    os::unix::prelude::PermissionsExt,
     path::Path,
     process::Command,
 };
+
+use crate::backend::version_installer::downloadjava;
 
 pub(crate) mod version_installer;
 
@@ -17,6 +20,7 @@ pub async fn start(
     ram: f64,
     gamemode: bool,
     pdirectory: String,
+    autojava: bool,
 ) -> Result<(), String> {
     let result = std::panic::catch_unwind(|| {
         let operationalsystem = std::env::consts::OS;
@@ -29,6 +33,19 @@ pub async fn start(
             ),
             _ => panic!("System not supported."),
         };
+
+        let autojavapaths = if std::env::consts::OS == "windows" {
+            vec![
+                format!("{}/java/java17/bin/java.exe", mc_dir),
+                format!("{}/java/java18/bin/java.exe", mc_dir),
+            ]
+        } else {
+            vec![
+                format!("{}/java/java17/bin/java", mc_dir),
+                format!("{}/java/java8/bin/java", mc_dir),
+            ]
+        };
+        let mut jvmargs = jvmargs;
 
         println!("{}", &mc_dir);
         let assets_dir = format!("{}/assets", &mc_dir);
@@ -49,6 +66,48 @@ pub async fn start(
         let content = serde_json::from_str(&fcontent);
 
         let p: Value = content.unwrap();
+
+        let jvm = match autojava {
+            true => {
+                if p["javaVersion"]["majorVersion"].as_i64().unwrap() > 8 {
+                    if Path::new(&autojavapaths[0]).exists() {
+                        jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
+                        .split(' ').map(|s| s.to_owned()).collect();
+
+                        autojavapaths[0].as_str()
+                    } else {
+                        downloadjava(true).unwrap();
+                        if std::env::consts::OS == "linux" {
+                            let mut permission =
+                                fs::metadata(&autojavapaths[0]).unwrap().permissions();
+                            permission.set_mode(0o755);
+                            fs::set_permissions(&autojavapaths[0], permission).unwrap();
+                        }
+
+                        autojavapaths[0].as_str()
+                    }
+                } else if Path::new(&autojavapaths[1]).exists() {
+                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
+                        .split(' ').map(|s| s.to_owned()).collect();
+
+                    autojavapaths[1].as_str()
+                } else {
+                    downloadjava(false).unwrap();
+                    if std::env::consts::OS == "linux" {
+                        let mut permission = fs::metadata(&autojavapaths[1]).unwrap().permissions();
+                        permission.set_mode(0o755);
+                        fs::set_permissions(&autojavapaths[1], permission).unwrap();
+                    }
+
+                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
+                        .split(' ').map(|s| s.to_owned()).collect();
+
+                    autojavapaths[1].as_str()
+                }
+            }
+            false => jvm,
+        };
+
         let mainclass = &p["mainClass"].as_str().unwrap();
         let mut assetindex = p["assets"].to_string();
         let nativedir = format!("{}/versions/{}/natives", &mc_dir, game_version);
