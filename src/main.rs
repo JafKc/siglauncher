@@ -247,7 +247,7 @@ impl Application for Siglauncher {
                 self.screen = 2;
                 Command::perform(
                     async move {
-                        match backend::version_installer::getversionlist() {
+                        match backend::installer::getversionlist() {
                             Ok(a) => a,
                             Err(_) => vec![],
                         }
@@ -301,7 +301,7 @@ impl Application for Siglauncher {
                 let ver = self.versiontodownload.clone().replace('\"', "");
                 Command::perform(
                     async move {
-                        match backend::version_installer::installversion(ver) {
+                        match backend::installer::installversion(ver) {
                             Ok(()) => "Installed successfully".to_string(),
                             Err(_) => "An error ocurred and version was not installed".to_string(),
                         }

@@ -8,9 +8,9 @@ use std::{
     process::Command,
 };
 
-use crate::backend::version_installer::downloadjava;
+use crate::backend::installer::downloadjava;
 
-pub(crate) mod version_installer;
+pub(crate) mod installer;
 
 pub async fn start(
     player: &str,
@@ -129,7 +129,7 @@ pub async fn start(
             let vanillajsonfilepath = Path::new(&vanillajsonpathstring);
             if !vanillajsonfilepath.exists() {
                 println!("{} needs to be installed.", vanillaversion);
-                version_installer::installversion(vanillaversion.to_string()).unwrap();
+                installer::installversion(vanillaversion.to_string()).unwrap();
             }
 
             let mut vanillaversionfile = File::open(vanillaversionpathstring).unwrap();
