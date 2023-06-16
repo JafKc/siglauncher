@@ -60,6 +60,8 @@ struct Siglauncher {
     daddpath: String,
 
     state: String,
+
+    showallversions: bool,
 }
 
 #[tokio::main]
@@ -99,6 +101,7 @@ enum Message {
     JVMChanged(String),
     ProfileFChanged(String),
     GamemodeChanged(bool),
+    ShowVersionsChanged(bool),
 
     InstallVersion,
     Downloaded(String),
@@ -166,6 +169,7 @@ impl Application for Siglauncher {
                 jvms: jvmnames,
                 currentjavaname: currentjavaname.to_string(),
                 gamemodelinux: p["gamemodelinux"].as_bool().unwrap(),
+                showallversions: p["showallversions"].as_bool().unwrap(),
                 currentprofilefolder: p["currentprofilefolder"].to_string(),
                 pdirectories: directorynames,
                 profilefolder: currentprofilefolder,
@@ -244,10 +248,11 @@ impl Application for Siglauncher {
             }
 
             Message::InstallationScreenButton => {
+                let showallversions = self.showallversions.clone();
                 self.screen = 2;
                 Command::perform(
                     async move {
-                        match backend::installer::getversionlist() {
+                        match backend::installer::getversionlist(showallversions) {
                             Ok(a) => a,
                             Err(_) => vec![],
                         }
@@ -266,6 +271,7 @@ impl Application for Siglauncher {
                     self.currentjavaname.clone(),
                     self.currentprofilefolder.clone(),
                     self.gamemodelinux,
+                    self.showallversions,
                 )
                 .unwrap();
                 self.screen = 1;
@@ -281,14 +287,14 @@ impl Application for Siglauncher {
             Message::Gotlist(a) => {
                 if a.is_empty() {
                     self.state = "Failed to get version list".to_string()
-                }
-
-                if self.downloadlist.is_empty() {
+                } else {
+                    self.downloadlist.clear();
                     for i in a {
                         let ii = i.replace('\"', "");
                         self.downloadlist.push(ii);
                     }
                 }
+
 
                 Command::none()
             }
@@ -491,6 +497,10 @@ impl Application for Siglauncher {
                 webbrowser::open("https://github.com/jafkc/siglauncher").unwrap();
                 Command::none()
             }
+            Message::ShowVersionsChanged(bool) => {
+                self.showallversions = bool;
+                Command::none()
+            },
         }
     }
     fn view(&self) -> Element<Message> {
@@ -621,6 +631,11 @@ impl Application for Siglauncher {
                 .height(40)
                 .on_press(Message::InstallVersion)
                 .style(theme::Button::Secondary),
+                if !self.showallversions{
+                    text("Enable the \"Show all versions in installer\" setting to download snapshots.").style(theme::Text::Green)
+                } else{
+                    text("")
+                },
                 state
             ]
             .spacing(15)
@@ -682,7 +697,7 @@ impl Application for Siglauncher {
                     )
                     .style(theme::Container::BlackContainer)
                     .padding(10),
-                    //memory and gamemode
+                    //memory, gamemode and showallversions option
                     container(
                         column![
                             column![
@@ -693,6 +708,17 @@ impl Application for Siglauncher {
                                     .width(250)
                                     .step(0.5)
                             ],
+                            row![
+                                text("Show all versions in installer")
+                                    .horizontal_alignment(alignment::Horizontal::Center),
+                                toggler(
+                                    String::new(),
+                                    self.showallversions,
+                                    Message::ShowVersionsChanged
+                                )
+                                .width(Length::Shrink)
+                            ]
+                            .spacing(10),
                             row![
                                 text("Use Feral's GameMode (Linux only)")
                                     .horizontal_alignment(alignment::Horizontal::Center),
@@ -821,6 +847,7 @@ fn checksettingsfile() {
             currentjavaname: "Automatic".to_string(),
             gamemodelinux: false,
             currentprofilefolder: "Default".to_string(),
+            showallversions: false,
             ..Default::default()
         };
 
@@ -860,6 +887,10 @@ fn checksettingsfile() {
                 "currentprofilefolder".to_owned(),
                 serde_json::to_value(launchsettings.currentprofilefolder).unwrap(),
             );
+            map.insert(
+                "showallversions".to_owned(),
+                serde_json::to_value(launchsettings.showallversions).unwrap(),
+            );
         }
 
         let serializedjson = serde_json::to_string_pretty(&json).unwrap();
@@ -898,6 +929,7 @@ fn updatesettingsfile(
     currentjvm: String,
     currentprofilefolder: String,
     gamemode: bool,
+    showallversions: bool,
 ) -> std::io::Result<()> {
     set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
 
@@ -912,6 +944,7 @@ fn updatesettingsfile(
     data["currentprofilefolder"] =
         serde_json::Value::String(currentprofilefolder.replace('\"', ""));
     data["gamemodelinux"] = serde_json::Value::Bool(gamemode);
+    data["showallversions"] = serde_json::Value::Bool(showallversions);
 
     let serialized = serde_json::to_string_pretty(&data)?;
 

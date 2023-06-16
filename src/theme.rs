@@ -22,6 +22,7 @@ pub enum Text {
     #[default]
     Default,
     Peach,
+    Green,
 }
 
 impl text::StyleSheet for Theme {
@@ -34,6 +35,9 @@ impl text::StyleSheet for Theme {
             },
             Text::Peach => text::Appearance {
                 color: color!(250, 179, 135).into(),
+            },
+            Text::Green => text::Appearance {
+                color: color!(166, 218, 149).into(),
             },
         }
     }
@@ -78,7 +82,7 @@ impl button::StyleSheet for Theme {
                 background: Color::from_rgb8(30, 102, 245).into(),
                 border_radius: 15.0,
                 border_width: 1.0,
-                border_color: color!(0x45, 0x85, 0x88),
+                border_color: color!(30, 102, 245),
                 ..Default::default()
             },
             Button::Secondary => button::Appearance {
