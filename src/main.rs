@@ -248,7 +248,7 @@ impl Application for Siglauncher {
             }
 
             Message::InstallationScreenButton => {
-                let showallversions = self.showallversions.clone();
+                let showallversions = self.showallversions;
                 self.screen = 2;
                 Command::perform(
                     async move {

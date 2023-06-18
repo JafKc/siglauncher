@@ -19,7 +19,7 @@ pub async fn start(
     jvmargs: Vec<String>,
     ram: f64,
     gamemode: bool,
-    pdirectory: String,
+    gamedirectory: String,
     autojava: bool,
 ) -> Result<(), String> {
     let result = std::panic::catch_unwind(|| {
@@ -77,7 +77,7 @@ pub async fn start(
         if game_version.to_lowercase().contains("fabric-loader")
             || game_version.to_lowercase().contains("forge")
         {
-            let vanillaversion = p["inheritsFrom"].as_str().unwrap();
+            let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version);
             let vanillaversionpathstring = format!(
                 "{}/versions/{}/{}.jar",
                 &mc_dir, vanillaversion, vanillaversion
@@ -91,30 +91,32 @@ pub async fn start(
                 println!("{} needs to be installed.", vanillaversion);
                 installer::installversion(vanillaversion.to_string()).unwrap();
             }
+            if !Path::new(&versionpath).exists() || fs::metadata(&versionpath).unwrap().len() == 0 {
+                let mut vanillaversionfile = File::open(vanillaversionpathstring).unwrap();
+                let mut buffer = Vec::new();
+                vanillaversionfile.read_to_end(&mut buffer).unwrap();
+                let mut modver_towrite = File::create(&versionpath).unwrap();
+                modver_towrite.write_all(&buffer).unwrap();
 
-            let mut vanillaversionfile = File::open(vanillaversionpathstring).unwrap();
-            let mut buffer = Vec::new();
-            vanillaversionfile.read_to_end(&mut buffer).unwrap();
-            let mut modver_towrite = File::create(&versionpath).unwrap();
-            modver_towrite.write_all(&buffer).unwrap();
+                fs::create_dir_all(format!("{}/versions/{}/natives", &mc_dir, game_version))
+                    .unwrap();
 
-            fs::create_dir_all(format!("{}/versions/{}/natives", &mc_dir, game_version)).unwrap();
-
-            if let Ok(vanillanatives) =
-                fs::read_dir(format!("{}/versions/{}/natives", &mc_dir, vanillaversion))
-            {
-                for i in vanillanatives {
-                    if !i.as_ref().unwrap().file_type().unwrap().is_dir() {
-                        fs::copy(
-                            i.as_ref().unwrap().path(),
-                            format!(
-                                "{}/versions/{}/natives/{}",
-                                &mc_dir,
-                                game_version,
-                                i.as_ref().unwrap().file_name().to_string_lossy()
-                            ),
-                        )
-                        .unwrap();
+                if let Ok(vanillanatives) =
+                    fs::read_dir(format!("{}/versions/{}/natives", &mc_dir, vanillaversion))
+                {
+                    for i in vanillanatives {
+                        if !i.as_ref().unwrap().file_type().unwrap().is_dir() {
+                            fs::copy(
+                                i.as_ref().unwrap().path(),
+                                format!(
+                                    "{}/versions/{}/natives/{}",
+                                    &mc_dir,
+                                    game_version,
+                                    i.as_ref().unwrap().file_name().to_string_lossy()
+                                ),
+                            )
+                            .unwrap();
+                        }
                     }
                 }
             }
@@ -157,12 +159,12 @@ pub async fn start(
             true => {
                 let mut p = p.clone();
                 if ismodded {
-                    let vanillaversion = p["inheritsFrom"].as_str().unwrap();
+                    let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version);
                     let vanillajsonpathstring = format!(
                         "{}/versions/{}/{}.json",
                         &mc_dir, vanillaversion, vanillaversion
                     );
-                    let mut vanillajson = File::open(&vanillajsonpathstring).unwrap();
+                    let mut vanillajson = File::open(vanillajsonpathstring).unwrap();
 
                     let mut vjsoncontent = String::new();
                     vanillajson.read_to_string(&mut vjsoncontent).unwrap();
@@ -212,12 +214,14 @@ pub async fn start(
             "{}/versions/{}/{}.jar",
             &mc_dir, game_version, game_version
         ));
-        if pdirectory.is_empty() {
+        let gamedir = if gamedirectory.is_empty() {
             env::set_current_dir(&mc_dir).expect("Failed to open profile folder!");
+            mc_dir
         } else {
-            fs::create_dir_all(&pdirectory).unwrap();
-            env::set_current_dir(&pdirectory).expect("Failed to open profile folder!");
-        }
+            fs::create_dir_all(&gamedirectory).unwrap();
+            env::set_current_dir(&gamedirectory).expect("Failed to open profile folder!");
+            gamedirectory
+        };
         let mut mineprogram = if gamemode {
             Command::new("gamemoderun")
         } else {
@@ -246,7 +250,7 @@ pub async fn start(
             "--userProperties",
             "{}",
             "--gameDir",
-            &pdirectory,
+            &gamedir,
             "--assetsDir",
             &assets_dir,
             "--assetIndex",
