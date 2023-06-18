@@ -317,6 +317,7 @@ impl Application for Siglauncher {
             Message::Downloaded(result) => {
                 self.state = result;
                 self.screen = 1;
+                backend::getinstalledversions();
                 Command::none()
             }
             Message::GoJavaMan => {
