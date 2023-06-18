@@ -3,10 +3,12 @@ use std::{
     env::{self},
     fs::{self, File},
     io::{Read, Write},
-    os::unix::prelude::PermissionsExt,
     path::Path,
     process::Command,
 };
+
+#[cfg(target_os = "linux")]
+use std::os::unix::prelude::PermissionsExt;
 
 use crate::backend::installer::downloadjava;
 
@@ -37,7 +39,7 @@ pub async fn start(
         let autojavapaths = if std::env::consts::OS == "windows" {
             vec![
                 format!("{}/java/java17/bin/java.exe", mc_dir),
-                format!("{}/java/java18/bin/java.exe", mc_dir),
+                format!("{}/java/java8/bin/java.exe", mc_dir),
             ]
         } else {
             vec![
@@ -178,12 +180,16 @@ pub async fn start(
                         autojavapaths[0].as_str()
                     } else {
                         downloadjava(true).unwrap();
+                        #[cfg(target_os = "linux")]
                         if std::env::consts::OS == "linux" {
                             let mut permission =
                                 fs::metadata(&autojavapaths[0]).unwrap().permissions();
                             permission.set_mode(0o755);
                             fs::set_permissions(&autojavapaths[0], permission).unwrap();
-                        }
+                        };
+
+                        jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
+                        .split(' ').map(|s| s.to_owned()).collect();
 
                         autojavapaths[0].as_str()
                     }
@@ -194,6 +200,7 @@ pub async fn start(
                     autojavapaths[1].as_str()
                 } else {
                     downloadjava(false).unwrap();
+                    #[cfg(target_os = "linux")]
                     if std::env::consts::OS == "linux" {
                         let mut permission = fs::metadata(&autojavapaths[1]).unwrap().permissions();
                         permission.set_mode(0o755);

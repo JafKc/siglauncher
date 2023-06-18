@@ -344,14 +344,28 @@ pub async fn getversionlist(
 pub async fn downloadjava(new: bool) -> Result<(), reqwest::Error> {
     let client = Client::new();
 
-    match std::env::consts::OS {
-        "linux" => {
-            let foldertostore = &format!("{}/.minecraft/java", std::env::var("HOME").unwrap());
-            let url = if new {
-                "https://raw.githubusercontent.com/JafKc/siglauncher-jvm/main/binaries/java17-linux.zip"
-            } else {
-                "https://raw.githubusercontent.com/JafKc/siglauncher-jvm/main/binaries/java8-linux.zip"
-            };
+            let foldertostore;
+            let url;
+
+            match std::env::consts::OS {
+                "linux" => {
+                    foldertostore = format!("{}/.minecraft/java", std::env::var("HOME").unwrap());
+                    url = if new {
+                        "https://raw.githubusercontent.com/JafKc/siglauncher-jvm/main/binaries/java17-linux.zip"
+                    } else {
+                        "https://raw.githubusercontent.com/JafKc/siglauncher-jvm/main/binaries/java8-linux.zip"
+                    };
+                },
+                "windows" => {
+                    foldertostore = format!("{}/AppData/Roaming/.minecraft/java", std::env::var("USERPROFILE").unwrap());
+                    url = if new {
+                        "https://raw.githubusercontent.com/JafKc/siglauncher-jvm/main/binaries/java17-windows.zip"
+                    } else {
+                        "https://raw.githubusercontent.com/JafKc/siglauncher-jvm/main/binaries/java8-windows.zip"
+                    };
+                },
+                _ => panic!("system not supported!")
+            }
 
             let download = client
                 .get(url)
@@ -361,9 +375,9 @@ pub async fn downloadjava(new: bool) -> Result<(), reqwest::Error> {
                 .bytes()
                 .await?;
 
-            fs::create_dir_all(foldertostore).unwrap();
+            fs::create_dir_all(&foldertostore).unwrap();
             let mut compressed =
-                File::create(format!("{}/compressedjava.zip", foldertostore)).unwrap();
+                File::create(format!("{}/compressedjava.zip", &foldertostore)).unwrap();
             compressed.write_all(&download).unwrap();
             let compressed = File::open(format!("{}/compressedjava.zip", foldertostore)).unwrap();
 
@@ -387,10 +401,9 @@ pub async fn downloadjava(new: bool) -> Result<(), reqwest::Error> {
             }
             fs::remove_file(format!("{}/compressedjava.zip", foldertostore)).unwrap();
             println!("Java was installed successfully.");
-        }
+        
 
-        "windows" => todo!(),
-        _ => panic!("System not supported."),
-    }
+        
+    
     Ok(())
 }
