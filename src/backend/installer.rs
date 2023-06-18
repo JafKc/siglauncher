@@ -328,14 +328,12 @@ pub async fn getversionlist(
     if let Some(versions) = p["versions"].as_array() {
         if showallversions {
             for i in versions {
-                    versionlist.push(i["id"].to_string())
-                
+                versionlist.push(i["id"].to_string())
             }
         } else {
             for i in versions {
                 if i["type"] == "release" {
-
-                versionlist.push(i["id"].to_string())
+                    versionlist.push(i["id"].to_string())
                 }
             }
         }

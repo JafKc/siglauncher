@@ -295,7 +295,6 @@ impl Application for Siglauncher {
                     }
                 }
 
-
                 Command::none()
             }
             Message::DownloadChanged(a) => {
@@ -500,7 +499,7 @@ impl Application for Siglauncher {
             Message::ShowVersionsChanged(bool) => {
                 self.showallversions = bool;
                 Command::none()
-            },
+            }
         }
     }
     fn view(&self) -> Element<Message> {

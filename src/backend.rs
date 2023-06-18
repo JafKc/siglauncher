@@ -67,53 +67,13 @@ pub async fn start(
 
         let p: Value = content.unwrap();
 
-        let jvm = match autojava {
-            true => {
-                if p["javaVersion"]["majorVersion"].as_i64().unwrap() > 8 {
-                    if Path::new(&autojavapaths[0]).exists() {
-                        jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
-                        .split(' ').map(|s| s.to_owned()).collect();
-
-                        autojavapaths[0].as_str()
-                    } else {
-                        downloadjava(true).unwrap();
-                        if std::env::consts::OS == "linux" {
-                            let mut permission =
-                                fs::metadata(&autojavapaths[0]).unwrap().permissions();
-                            permission.set_mode(0o755);
-                            fs::set_permissions(&autojavapaths[0], permission).unwrap();
-                        }
-
-                        autojavapaths[0].as_str()
-                    }
-                } else if Path::new(&autojavapaths[1]).exists() {
-                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
-                        .split(' ').map(|s| s.to_owned()).collect();
-
-                    autojavapaths[1].as_str()
-                } else {
-                    downloadjava(false).unwrap();
-                    if std::env::consts::OS == "linux" {
-                        let mut permission = fs::metadata(&autojavapaths[1]).unwrap().permissions();
-                        permission.set_mode(0o755);
-                        fs::set_permissions(&autojavapaths[1], permission).unwrap();
-                    }
-
-                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
-                        .split(' ').map(|s| s.to_owned()).collect();
-
-                    autojavapaths[1].as_str()
-                }
-            }
-            false => jvm,
-        };
-
         let mainclass = &p["mainClass"].as_str().unwrap();
         let mut assetindex = p["assets"].to_string();
         let nativedir = format!("{}/versions/{}/natives", &mc_dir, game_version);
 
         let mut libraries_list = libmanager(&p, operationalsystem, &mc_dir);
 
+        let mut ismodded = false;
         if game_version.to_lowercase().contains("fabric-loader")
             || game_version.to_lowercase().contains("forge")
         {
@@ -166,6 +126,7 @@ pub async fn start(
             let vjson: Value = serde_json::from_str(&vjsoncontent).unwrap();
             libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
             assetindex = vjson["assets"].to_string();
+            ismodded = true;
         }
 
         let isforge = game_version.to_lowercase().contains("forge");
@@ -191,6 +152,60 @@ pub async fn start(
                 ))
             }
         }
+
+        let jvm = match autojava {
+            true => {
+                let mut p = p.clone();
+                if ismodded {
+                    let vanillaversion = p["inheritsFrom"].as_str().unwrap();
+                    let vanillajsonpathstring = format!(
+                        "{}/versions/{}/{}.json",
+                        &mc_dir, vanillaversion, vanillaversion
+                    );
+                    let mut vanillajson = File::open(&vanillajsonpathstring).unwrap();
+
+                    let mut vjsoncontent = String::new();
+                    vanillajson.read_to_string(&mut vjsoncontent).unwrap();
+                    p = serde_json::from_str(&vjsoncontent).unwrap();
+                }
+                if p["javaVersion"]["majorVersion"].as_i64().unwrap() > 8 {
+                    if Path::new(&autojavapaths[0]).exists() {
+                        jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
+                        .split(' ').map(|s| s.to_owned()).collect();
+
+                        autojavapaths[0].as_str()
+                    } else {
+                        downloadjava(true).unwrap();
+                        if std::env::consts::OS == "linux" {
+                            let mut permission =
+                                fs::metadata(&autojavapaths[0]).unwrap().permissions();
+                            permission.set_mode(0o755);
+                            fs::set_permissions(&autojavapaths[0], permission).unwrap();
+                        }
+
+                        autojavapaths[0].as_str()
+                    }
+                } else if Path::new(&autojavapaths[1]).exists() {
+                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
+                        .split(' ').map(|s| s.to_owned()).collect();
+
+                    autojavapaths[1].as_str()
+                } else {
+                    downloadjava(false).unwrap();
+                    if std::env::consts::OS == "linux" {
+                        let mut permission = fs::metadata(&autojavapaths[1]).unwrap().permissions();
+                        permission.set_mode(0o755);
+                        fs::set_permissions(&autojavapaths[1], permission).unwrap();
+                    }
+
+                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
+                        .split(' ').map(|s| s.to_owned()).collect();
+
+                    autojavapaths[1].as_str()
+                }
+            }
+            false => jvm,
+        };
 
         assetindex = assetindex.replace('\"', "");
         libraries_list.push_str(&format!(
