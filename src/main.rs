@@ -45,7 +45,11 @@ struct Siglauncher {
     #[serde(skip_serializing)]
     downloadlist: Vec<String>,
     #[serde(skip_serializing)]
+    fabricdownloadlist: Vec<String>,
+    #[serde(skip_serializing)]
     versiontodownload: String,
+    #[serde(skip_serializing)]
+    fabricversiontodownload: String,
     #[serde(skip_serializing)]
     pdirectories: Vec<String>,
     #[serde(skip_serializing)]
@@ -91,9 +95,10 @@ enum Message {
 
     GoJavaMan,
     GoDprofileMan,
-    Launched(Result<(), String>),
-    Gotlist(Vec<String>),
+    Launched(String),
+    Gotlist(Vec<Vec<String>>),
     DownloadChanged(String),
+    FabricDownloadChanged(String),
 
     RamChanged(f64),
     Apply,
@@ -103,7 +108,7 @@ enum Message {
     GamemodeChanged(bool),
     ShowVersionsChanged(bool),
 
-    InstallVersion,
+    InstallVersion(u8),
     Downloaded(String),
 
     JVMname(String),
@@ -210,7 +215,7 @@ impl Application for Siglauncher {
 
                     Command::perform(
                         async move {
-                            backend::start(
+                            match backend::start(
                                 username.as_str(),
                                 version.unwrap().expect("a").as_str(),
                                 java[1].replace('\"', "").as_str(),
@@ -219,8 +224,12 @@ impl Application for Siglauncher {
                                 gamemode,
                                 dprofilepath,
                                 autojava,
-                            )
-                            .await
+                            ) {
+                                Ok(()) => String::from("Launched!"),
+                                Err(_) => String::from("Error! Game didn't launch"),
+                            }
+                            
+                            
                         },
                         Message::Launched,
                     )
@@ -239,11 +248,7 @@ impl Application for Siglauncher {
             }
             Message::Launched(result) => {
                 println!("Backend finished.");
-                if result.is_ok() {
-                    self.state = String::from("Launched.");
-                } else {
-                    self.state = result.err().unwrap();
-                }
+                self.state = result;
                 Command::none()
             }
 
@@ -289,9 +294,14 @@ impl Application for Siglauncher {
                     self.state = "Failed to get version list".to_string()
                 } else {
                     self.downloadlist.clear();
-                    for i in a {
+                    self.fabricdownloadlist.clear();
+                    for i in &a[0] {
                         let ii = i.replace('\"', "");
                         self.downloadlist.push(ii);
+                    }
+                    for i in &a[1] {
+                        let ii = i.replace('\"', "");
+                        self.fabricdownloadlist.push(ii);
                     }
                 }
 
@@ -301,12 +311,23 @@ impl Application for Siglauncher {
                 self.versiontodownload = a;
                 Command::none()
             }
-            Message::InstallVersion => {
+
+            Message::FabricDownloadChanged(a) => {
+                self.fabricversiontodownload = a;
+                Command::none()
+            }
+
+            Message::InstallVersion(versiontype) => {
+                // 1 for vanilla, 2 for fabric and 3 for forge
                 self.state = String::from("Downloading version...");
-                let ver = self.versiontodownload.clone().replace('\"', "");
+                let ver = match versiontype {
+                    1 => self.versiontodownload.clone().replace('\"', ""),
+                    2 => self.fabricversiontodownload.clone().replace('\"', ""),
+                    _ => panic!("Version type doesn't exists!"),
+                };
                 Command::perform(
                     async move {
-                        match backend::installer::installversion(ver) {
+                        match backend::installer::installversion(ver, versiontype) {
                             Ok(()) => "Installed successfully".to_string(),
                             Err(_) => "An error ocurred and version was not installed".to_string(),
                         }
@@ -612,7 +633,12 @@ impl Application for Siglauncher {
                 //installerscreen
                 //title
                 text("Version installer").size(50),
-                //versionselector
+
+                row![
+                //vanilla
+                container(
+                column![
+                    text("Vanilla"),
                 pick_list(
                     self.downloadlist.clone(),
                     Some(format!("{:?}", &self.versiontodownload)).map(|s| s.replace('\"', "")),
@@ -629,8 +655,32 @@ impl Application for Siglauncher {
                 )
                 .width(250)
                 .height(40)
-                .on_press(Message::InstallVersion)
-                .style(theme::Button::Secondary),
+                .on_press(Message::InstallVersion(1))
+                .style(theme::Button::Secondary)].spacing(15)).style(theme::Container::BlackContainer).padding(10),
+
+                //fabric
+                container(
+                    column![
+                        text("Fabric"),
+                    pick_list(
+                        self.fabricdownloadlist.clone(),
+                        Some(format!("{:?}", &self.fabricversiontodownload)).map(|s| s.replace('\"', "")),
+                        Message::FabricDownloadChanged,
+                    )
+                    .placeholder("Select a version")
+                    .width(250)
+                    .text_size(25),
+                    //installbutton
+                    button(
+                        text("Install")
+                            .size(30)
+                            .horizontal_alignment(alignment::Horizontal::Center)
+                    )
+                    .width(250)
+                    .height(40)
+                    .on_press(Message::InstallVersion(2))
+                    .style(theme::Button::Secondary)].spacing(15)).style(theme::Container::BlackContainer).padding(10)].spacing(15),
+
                 if !self.showallversions{
                     text("Enable the \"Show all versions in installer\" setting to download snapshots.").style(theme::Text::Green)
                 } else{

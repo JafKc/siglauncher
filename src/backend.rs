@@ -2,7 +2,7 @@ use serde_json::Value;
 use std::{
     env::{self},
     fs::{self, File},
-    io::{Read, Write},
+    io::{Read},
     path::Path,
     process::Command,
 };
@@ -14,6 +14,7 @@ use crate::backend::installer::downloadjava;
 
 pub(crate) mod installer;
 
+#[tokio::main]
 pub async fn start(
     player: &str,
     game_version: &str,
@@ -23,8 +24,7 @@ pub async fn start(
     gamemode: bool,
     gamedirectory: String,
     autojava: bool,
-) -> Result<(), String> {
-    let result = std::panic::catch_unwind(|| {
+) -> std::io::Result<()> {
         let operationalsystem = std::env::consts::OS;
         let player = player;
         let mc_dir = match std::env::consts::OS {
@@ -76,51 +76,22 @@ pub async fn start(
         let mut libraries_list = libmanager(&p, operationalsystem, &mc_dir);
 
         let mut ismodded = false;
-        if game_version.to_lowercase().contains("fabric-loader")
+        if game_version.to_lowercase().contains("fabric")
             || game_version.to_lowercase().contains("forge")
         {
             let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version);
-            let vanillaversionpathstring = format!(
-                "{}/versions/{}/{}.jar",
-                &mc_dir, vanillaversion, vanillaversion
-            );
             let vanillajsonpathstring = format!(
                 "{}/versions/{}/{}.json",
-                &mc_dir, vanillaversion, vanillaversion
+                &mc_dir, game_version, vanillaversion
             );
             let vanillajsonfilepath = Path::new(&vanillajsonpathstring);
             if !vanillajsonfilepath.exists() {
-                println!("{} needs to be installed.", vanillaversion);
-                installer::installversion(vanillaversion.to_string()).unwrap();
-            }
-            if !Path::new(&versionpath).exists() || fs::metadata(&versionpath).unwrap().len() == 0 {
-                let mut vanillaversionfile = File::open(vanillaversionpathstring).unwrap();
-                let mut buffer = Vec::new();
-                vanillaversionfile.read_to_end(&mut buffer).unwrap();
-                let mut modver_towrite = File::create(&versionpath).unwrap();
-                modver_towrite.write_all(&buffer).unwrap();
-
-                fs::create_dir_all(format!("{}/versions/{}/natives", &mc_dir, game_version))
-                    .unwrap();
-
-                if let Ok(vanillanatives) =
-                    fs::read_dir(format!("{}/versions/{}/natives", &mc_dir, vanillaversion))
-                {
-                    for i in vanillanatives {
-                        if !i.as_ref().unwrap().file_type().unwrap().is_dir() {
-                            fs::copy(
-                                i.as_ref().unwrap().path(),
-                                format!(
-                                    "{}/versions/{}/natives/{}",
-                                    &mc_dir,
-                                    game_version,
-                                    i.as_ref().unwrap().file_name().to_string_lossy()
-                                ),
-                            )
-                            .unwrap();
-                        }
-                    }
-                }
+                installer::downloadversionjson(
+                    1,
+                    &vanillaversion.to_owned(),
+                    &format!("{}/versions/{}", &mc_dir, game_version),
+                )
+                .await.unwrap()
             }
 
             let mut vanillajson = File::open(&vanillajsonpathstring).unwrap();
@@ -131,6 +102,30 @@ pub async fn start(
             libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
             assetindex = vjson["assets"].to_string();
             ismodded = true;
+
+            if !Path::new(&versionpath).exists() || fs::metadata(&versionpath).unwrap().len() == 0 {
+                installer::downloadversionjar(
+                    1,
+                    &vjson,
+                    &format!("{}/versions/{}", &mc_dir, &game_version),
+                    &vanillaversion.to_owned(),
+                )
+                .await.unwrap();
+                fs::rename(
+                    &format!(
+                        "{}/versions/{}/{}.jar",
+                        &mc_dir, &game_version, vanillaversion
+                    ),
+                    &format!(
+                        "{}/versions/{}/{}.jar",
+                        &mc_dir, &game_version, game_version
+                    ),
+                )
+                .unwrap();
+            if let Some(libraries) = vjson["libraries"].as_array() {
+
+                installer::downloadlibraries(&mc_dir, operationalsystem, libraries, &format!("{}/versions/{}", &mc_dir, &game_version)).await.unwrap()}
+            }
         }
 
         let isforge = game_version.to_lowercase().contains("forge");
@@ -164,8 +159,9 @@ pub async fn start(
                     let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version);
                     let vanillajsonpathstring = format!(
                         "{}/versions/{}/{}.json",
-                        &mc_dir, vanillaversion, vanillaversion
+                        &mc_dir, game_version, vanillaversion
                     );
+
                     let mut vanillajson = File::open(vanillajsonpathstring).unwrap();
 
                     let mut vjsoncontent = String::new();
@@ -179,7 +175,7 @@ pub async fn start(
 
                         autojavapaths[0].as_str()
                     } else {
-                        downloadjava(true).unwrap();
+                        downloadjava(true).await.unwrap();
                         #[cfg(target_os = "linux")]
                         if std::env::consts::OS == "linux" {
                             let mut permission =
@@ -199,7 +195,7 @@ pub async fn start(
 
                     autojavapaths[1].as_str()
                 } else {
-                    downloadjava(false).unwrap();
+                    downloadjava(false).await.unwrap();
                     #[cfg(target_os = "linux")]
                     if std::env::consts::OS == "linux" {
                         let mut permission = fs::metadata(&autojavapaths[1]).unwrap().permissions();
@@ -272,18 +268,11 @@ pub async fn start(
         }
         println!("{:?}", mineprogram);
         mineprogram.spawn().expect("Failed to execute Minecraft!");
-    });
 
-    match result {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            Err("A panic occurred. Maybe there is something wrong with your options.".to_string())
-        }
-    }
+    Ok(())
 }
 
-#[tokio::main]
-async fn libmanager(p: &Value, os: &str, mc_dir: &String) -> String {
+fn libmanager(p: &Value, os: &str, mc_dir: &String) -> String {
     let mut libraries_list = String::new();
 
     if let Some(libraries) = p["libraries"].as_array() {
