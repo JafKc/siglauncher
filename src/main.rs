@@ -228,8 +228,6 @@ impl Application for Siglauncher {
                                 Ok(()) => String::from("Launched!"),
                                 Err(_) => String::from("Error! Game didn't launch"),
                             }
-                            
-                            
                         },
                         Message::Launched,
                     )

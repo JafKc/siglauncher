@@ -2,7 +2,7 @@ use serde_json::Value;
 use std::{
     env::{self},
     fs::{self, File},
-    io::{Read},
+    io::Read,
     path::Path,
     process::Command,
 };
@@ -25,249 +25,305 @@ pub async fn start(
     gamedirectory: String,
     autojava: bool,
 ) -> std::io::Result<()> {
-        let operationalsystem = std::env::consts::OS;
-        let player = player;
-        let mc_dir = match std::env::consts::OS {
-            "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
-            "windows" => format!(
-                "{}/AppData/Roaming/.minecraft",
-                std::env::var("USERPROFILE").unwrap().replace('\\', "/")
-            ),
-            _ => panic!("System not supported."),
-        };
+    let operationalsystem = std::env::consts::OS;
+    let player = player;
+    let mc_dir = match std::env::consts::OS {
+        "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
+        "windows" => format!(
+            "{}/AppData/Roaming/.minecraft",
+            std::env::var("USERPROFILE").unwrap().replace('\\', "/")
+        ),
+        _ => panic!("System not supported."),
+    };
 
-        let autojavapaths = if std::env::consts::OS == "windows" {
-            vec![
-                format!("{}/java/java17/bin/java.exe", mc_dir),
-                format!("{}/java/java8/bin/java.exe", mc_dir),
-            ]
-        } else {
-            vec![
-                format!("{}/java/java17/bin/java", mc_dir),
-                format!("{}/java/java8/bin/java", mc_dir),
-            ]
-        };
-        let mut jvmargs = jvmargs;
+    let gamedir = if gamedirectory.is_empty() {
+        env::set_current_dir(&mc_dir).expect("Failed to open profile folder!");
+        &mc_dir
+    } else {
+        fs::create_dir_all(&gamedirectory).unwrap();
+        env::set_current_dir(&gamedirectory).expect("Failed to open profile folder!");
+        &gamedirectory
+    };
 
-        println!("{}", &mc_dir);
-        let assets_dir = format!("{}/assets", &mc_dir);
-        let game_version = game_version;
-        let uuid = "9791bffa968538928aa0b3ff397fd54f";
+    let autojavapaths = if std::env::consts::OS == "windows" {
+        vec![
+            format!("{}/java/java17/bin/java.exe", mc_dir),
+            format!("{}/java/java8/bin/java.exe", mc_dir),
+        ]
+    } else {
+        vec![
+            format!("{}/java/java17/bin/java", mc_dir),
+            format!("{}/java/java8/bin/java", mc_dir),
+        ]
+    };
+    let mut jvmargs = jvmargs;
 
-        let versionpath = format!("{}/versions/{}/{}.jar", &mc_dir, game_version, game_version);
+    println!("{}", &mc_dir);
+    let assets_dir = format!("{}/assets", &mc_dir);
+    let game_version = game_version;
+    let uuid = "9791bffa968538928aa0b3ff397fd54f";
 
-        let jpathstring = format!(
+    let versionpath = format!("{}/versions/{}/{}.jar", &mc_dir, game_version, game_version);
+
+    let jpathstring = format!(
+        "{}/versions/{}/{}.json",
+        &mc_dir, game_version, game_version
+    );
+    let jsonpath = Path::new(&jpathstring);
+
+    let mut file = File::open(jsonpath).unwrap();
+    let mut fcontent = String::new();
+    file.read_to_string(&mut fcontent).unwrap();
+    let content = serde_json::from_str(&fcontent);
+
+    let p: Value = content.unwrap();
+
+    let mainclass = &p["mainClass"].as_str().unwrap();
+    let mut assetindex = p["assets"].as_str().unwrap_or("").to_string();
+    let nativedir = format!("{}/versions/{}/natives", &mc_dir, game_version);
+
+    let mut libraries_list = libmanager(&p, operationalsystem, &mc_dir);
+    let mut version_game_args = vec![];
+    let mut moddedgameargs = vec![];
+    //let mut oldmoddedgameargs_str = String::new();
+
+    let mut ismodded = false;
+    if game_version.to_lowercase().contains("fabric")
+        || game_version.to_lowercase().contains("forge")
+    {
+        let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version);
+        let vanillajsonpathstring = format!(
             "{}/versions/{}/{}.json",
-            &mc_dir, game_version, game_version
+            &mc_dir, game_version, vanillaversion
         );
-        let jsonpath = Path::new(&jpathstring);
+        let vanillajsonfilepath = Path::new(&vanillajsonpathstring);
+        if !vanillajsonfilepath.exists() {
+            installer::downloadversionjson(
+                1,
+                &vanillaversion.to_owned(),
+                &format!("{}/versions/{}", &mc_dir, game_version),
+            )
+            .await
+            .unwrap()
+        }
 
-        let mut file = File::open(jsonpath).unwrap();
-        let mut fcontent = String::new();
-        file.read_to_string(&mut fcontent).unwrap();
-        let content = serde_json::from_str(&fcontent);
+        let mut vanillajson = File::open(&vanillajsonpathstring).unwrap();
 
-        let p: Value = content.unwrap();
+        let mut vjsoncontent = String::new();
+        vanillajson.read_to_string(&mut vjsoncontent).unwrap();
+        let vjson: Value = serde_json::from_str(&vjsoncontent).unwrap();
+        let asseti = vjson["assets"].as_str().unwrap().to_string();
 
-        let mainclass = &p["mainClass"].as_str().unwrap();
-        let mut assetindex = p["assets"].to_string();
-        let nativedir = format!("{}/versions/{}/natives", &mc_dir, game_version);
+        assetindex = asseti;
+        ismodded = true;
 
-        let mut libraries_list = libmanager(&p, operationalsystem, &mc_dir);
-
-        let mut ismodded = false;
-        if game_version.to_lowercase().contains("fabric")
-            || game_version.to_lowercase().contains("forge")
-        {
-            let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version);
-            let vanillajsonpathstring = format!(
-                "{}/versions/{}/{}.json",
-                &mc_dir, game_version, vanillaversion
-            );
-            let vanillajsonfilepath = Path::new(&vanillajsonpathstring);
-            if !vanillajsonfilepath.exists() {
-                installer::downloadversionjson(
-                    1,
-                    &vanillaversion.to_owned(),
-                    &format!("{}/versions/{}", &mc_dir, game_version),
-                )
-                .await.unwrap()
+        if let Some(arguments) = vjson["arguments"]["game"].as_array() {
+            for i in arguments {
+                moddedgameargs.push(i.to_owned())
             }
+        } // else if let Some(arguments) = vjson["minecraftArguments"].as_str() {
+          //  oldmoddedgameargs_str = arguments.to_string();
+          // }
 
-            let mut vanillajson = File::open(&vanillajsonpathstring).unwrap();
+        libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
 
-            let mut vjsoncontent = String::new();
-            vanillajson.read_to_string(&mut vjsoncontent).unwrap();
-            let vjson: Value = serde_json::from_str(&vjsoncontent).unwrap();
-            libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
-            assetindex = vjson["assets"].to_string();
-            ismodded = true;
-
-            if !Path::new(&versionpath).exists() || fs::metadata(&versionpath).unwrap().len() == 0 {
-                installer::downloadversionjar(
-                    1,
-                    &vjson,
-                    &format!("{}/versions/{}", &mc_dir, &game_version),
-                    &vanillaversion.to_owned(),
-                )
-                .await.unwrap();
-                fs::rename(
-                    &format!(
-                        "{}/versions/{}/{}.jar",
-                        &mc_dir, &game_version, vanillaversion
-                    ),
-                    &format!(
-                        "{}/versions/{}/{}.jar",
-                        &mc_dir, &game_version, game_version
-                    ),
-                )
-                .unwrap();
+        if !Path::new(&versionpath).exists() || fs::metadata(&versionpath).unwrap().len() == 0 {
+            installer::downloadversionjar(
+                1,
+                &vjson,
+                &format!("{}/versions/{}", &mc_dir, &game_version),
+                &vanillaversion.to_owned(),
+            )
+            .await
+            .unwrap();
+            fs::rename(
+                &format!(
+                    "{}/versions/{}/{}.jar",
+                    &mc_dir, &game_version, vanillaversion
+                ),
+                &format!(
+                    "{}/versions/{}/{}.jar",
+                    &mc_dir, &game_version, game_version
+                ),
+            )
+            .unwrap();
             if let Some(libraries) = vjson["libraries"].as_array() {
-
-                installer::downloadlibraries(&mc_dir, operationalsystem, libraries, &format!("{}/versions/{}", &mc_dir, &game_version)).await.unwrap()}
+                installer::downloadlibraries(
+                    &mc_dir,
+                    operationalsystem,
+                    libraries,
+                    &format!("{}/versions/{}", &mc_dir, &game_version),
+                )
+                .await
+                .unwrap()
             }
         }
+    }
 
-        let isforge = game_version.to_lowercase().contains("forge");
-        let mut forgejvmargs: Vec<String> = vec![];
-        let mut forgegameargs: Vec<String> = vec![];
-        if isforge {
-            if !p["arguments"].is_null() {
-                if let Some(forgejvmarguments) = p["arguments"]["jvm"].as_array() {
-                    for i in forgejvmarguments {
-                        forgejvmargs.push(i.as_str().unwrap().to_string());
-                    }
-                };
+    let jvm = match autojava {
+        true => {
+            let mut p = p.clone();
+            if ismodded {
+                let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version);
+                let vanillajsonpathstring = format!(
+                    "{}/versions/{}/{}.json",
+                    &mc_dir, game_version, vanillaversion
+                );
 
-                if let Some(forgegamearguments) = p["arguments"]["game"].as_array() {
-                    for i in forgegamearguments {
-                        forgegameargs.push(i.as_str().unwrap().to_string());
-                    }
-                }
-            } else if !p["minecraftArguments"].is_null() {
-                forgegameargs.push(String::from("--tweakClass"));
-                forgegameargs.push(String::from(
-                    "net.minecraftforge.fml.common.launcher.FMLTweaker",
-                ))
+                let mut vanillajson = File::open(vanillajsonpathstring).unwrap();
+
+                let mut vjsoncontent = String::new();
+                vanillajson.read_to_string(&mut vjsoncontent).unwrap();
+                p = serde_json::from_str(&vjsoncontent).unwrap();
             }
-        }
-
-        let jvm = match autojava {
-            true => {
-                let mut p = p.clone();
-                if ismodded {
-                    let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version);
-                    let vanillajsonpathstring = format!(
-                        "{}/versions/{}/{}.json",
-                        &mc_dir, game_version, vanillaversion
-                    );
-
-                    let mut vanillajson = File::open(vanillajsonpathstring).unwrap();
-
-                    let mut vjsoncontent = String::new();
-                    vanillajson.read_to_string(&mut vjsoncontent).unwrap();
-                    p = serde_json::from_str(&vjsoncontent).unwrap();
-                }
-                if p["javaVersion"]["majorVersion"].as_i64().unwrap() > 8 {
-                    if Path::new(&autojavapaths[0]).exists() {
-                        jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
+            if p["javaVersion"]["majorVersion"].as_i64().unwrap() > 8 {
+                if Path::new(&autojavapaths[0]).exists() {
+                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
                         .split(' ').map(|s| s.to_owned()).collect();
 
-                        autojavapaths[0].as_str()
-                    } else {
-                        downloadjava(true).await.unwrap();
-                        #[cfg(target_os = "linux")]
-                        if std::env::consts::OS == "linux" {
-                            let mut permission =
-                                fs::metadata(&autojavapaths[0]).unwrap().permissions();
-                            permission.set_mode(0o755);
-                            fs::set_permissions(&autojavapaths[0], permission).unwrap();
-                        };
-
-                        jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
-                        .split(' ').map(|s| s.to_owned()).collect();
-
-                        autojavapaths[0].as_str()
-                    }
-                } else if Path::new(&autojavapaths[1]).exists() {
-                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
-                        .split(' ').map(|s| s.to_owned()).collect();
-
-                    autojavapaths[1].as_str()
+                    autojavapaths[0].as_str()
                 } else {
-                    downloadjava(false).await.unwrap();
+                    downloadjava(true).await.unwrap();
                     #[cfg(target_os = "linux")]
                     if std::env::consts::OS == "linux" {
-                        let mut permission = fs::metadata(&autojavapaths[1]).unwrap().permissions();
+                        let mut permission = fs::metadata(&autojavapaths[0]).unwrap().permissions();
                         permission.set_mode(0o755);
-                        fs::set_permissions(&autojavapaths[1], permission).unwrap();
-                    }
+                        fs::set_permissions(&autojavapaths[0], permission).unwrap();
+                    };
 
-                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
+                    jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
                         .split(' ').map(|s| s.to_owned()).collect();
 
-                    autojavapaths[1].as_str()
+                    autojavapaths[0].as_str()
+                }
+            } else if Path::new(&autojavapaths[1]).exists() {
+                jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
+                        .split(' ').map(|s| s.to_owned()).collect();
+
+                autojavapaths[1].as_str()
+            } else {
+                downloadjava(false).await.unwrap();
+                #[cfg(target_os = "linux")]
+                if std::env::consts::OS == "linux" {
+                    let mut permission = fs::metadata(&autojavapaths[1]).unwrap().permissions();
+                    permission.set_mode(0o755);
+                    fs::set_permissions(&autojavapaths[1], permission).unwrap();
+                }
+
+                jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+PerfDisableSharedMem -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:+UseCompressedOops -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseFPUForSpilling -Dgraal.CompilerConfiguration=community -XX:+UseG1GC -XX:MaxGCPauseMillis=37 -XX:+PerfDisableSharedMem -XX:G1HeapRegionSize=16M -XX:G1NewSizePercent=23 -XX:G1ReservePercent=20 -XX:SurvivorRatio=32 -XX:G1MixedGCCountTarget=3 -XX:G1HeapWastePercent=20 -XX:InitiatingHeapOccupancyPercent=10 -XX:G1RSetUpdatingPauseTimePercent=0 -XX:MaxTenuringThreshold=1 -XX:G1SATBBufferEnqueueingThresholdPercent=30 -XX:G1ConcMarkStepDurationMillis=5.0 -XX:G1ConcRSHotCardLimit=16 -XX:G1ConcRefinementServiceIntervalMillis=150 -XX:GCTimeRatio=99"
+                        .split(' ').map(|s| s.to_owned()).collect();
+
+                autojavapaths[1].as_str()
+            }
+        }
+        false => jvm,
+    };
+
+    libraries_list.push_str(&format!(
+        "{}/versions/{}/{}.jar",
+        &mc_dir, game_version, game_version
+    ));
+
+    let mut version_jvm_args = vec![];
+    if let Some(arguments) = p["arguments"]["jvm"].as_array() {
+        for i in arguments {
+            if i.is_string() {
+                let value = i.as_str().unwrap();
+                if value.contains("${natives_directory}") {
+                    let value = value.replace("${natives_directory}", &nativedir);
+                    version_jvm_args.push(value);
+                } else {
+                    version_jvm_args.push(value.to_owned())
                 }
             }
-            false => jvm,
-        };
+        }
+    } else {
+        version_jvm_args.push(format!("-Djava.library.path={}", nativedir))
+    }
+    if let Some(arguments) = p["arguments"]["game"].as_array() {
+        let gamedata = vec![
+            player.to_owned(),
+            game_version.to_string(),
+            gamedir.to_string(),
+            assets_dir,
+            assetindex,
+            uuid.to_owned(),
+            String::from("[pro]"),
+            String::from("{}"),
+            String::from("legacy"),
+            String::from("release"),
+        ];
+        let mut str_arguments = vec![];
+        let mut str_moddedgameargs = vec![];
+        let mut needs_user_properties = true;
+        for i in arguments {
+            if i.is_string() {
+                if i.as_str().unwrap_or("").contains("--userProperties") {
+                    needs_user_properties = false;
+                }
+                str_arguments.push(i.as_str().unwrap_or("").to_owned())
+            } else {
+                if i.as_str().unwrap_or("").contains("--userProperties") {
+                    needs_user_properties = false;
+                }
+                str_arguments.push(i["value"].as_str().unwrap_or("").to_owned())
+            }
+        }
+        for i in moddedgameargs {
+            str_moddedgameargs.push(i.as_str().unwrap_or("").to_owned())
+        }
+        if needs_user_properties{
+            str_moddedgameargs.push("--userProperties".to_string());
+            str_moddedgameargs.push("{}".to_string());
+        }
+        println!("{:?}", str_arguments);
+        version_game_args = getgameargs(str_arguments, &gamedata.clone());
+        version_game_args.extend_from_slice(&getgameargs(str_moddedgameargs, &gamedata))
+    } else if let Some(arguments) = p["minecraftArguments"].as_str() {
+        let gamedata = vec![
+            player.to_owned(),
+            game_version.to_string(),
+            gamedir.to_string(),
+            assets_dir,
+            assetindex,
+            uuid.to_owned(),
+            String::from("[pro]"),
+            String::from("{}"),
+            String::from("legacy"),
+            String::from("Release"),
+            String::from("Modified"),
+        ];
+        //let oldmoddedargs: Vec<String> = oldmoddedgameargs_str.split_whitespace().map(String::from).collect();
+        let oldargs: Vec<String> = arguments
+            .to_string()
+            .split_whitespace()
+            .map(String::from)
+            .collect();
 
-        assetindex = assetindex.replace('\"', "");
-        libraries_list.push_str(&format!(
-            "{}/versions/{}/{}.jar",
-            &mc_dir, game_version, game_version
-        ));
-        let gamedir = if gamedirectory.is_empty() {
-            env::set_current_dir(&mc_dir).expect("Failed to open profile folder!");
-            mc_dir
-        } else {
-            fs::create_dir_all(&gamedirectory).unwrap();
-            env::set_current_dir(&gamedirectory).expect("Failed to open profile folder!");
-            gamedirectory
-        };
-        let mut mineprogram = if gamemode {
-            Command::new("gamemoderun")
-        } else {
-            Command::new(jvm)
-        };
+        //version_game_args = getgameargs(oldmoddedargs, &gamedata.clone());
+        version_game_args.extend_from_slice(&getgameargs(oldargs, &gamedata))
+    }
 
-        if gamemode {
-            mineprogram.arg(jvm);
-        }
-        mineprogram
-            .arg(format!("-Xmx{}M", ram * 1024.))
-            .args(jvmargs)
-            .arg(format!("-Djava.library.path={}", nativedir))
-            .arg("-cp")
-            .arg(libraries_list);
-        if isforge {
-            mineprogram.args(forgejvmargs);
-        }
-        mineprogram.arg(mainclass).args([
-            "--username",
-            player,
-            "--version",
-            game_version,
-            "--accessToken",
-            "[pro]",
-            "--userProperties",
-            "{}",
-            "--gameDir",
-            &gamedir,
-            "--assetsDir",
-            &assets_dir,
-            "--assetIndex",
-            &assetindex,
-            "--uuid",
-            uuid,
-            "--userType",
-            "legacy",
-        ]);
-        if isforge {
-            mineprogram.args(forgegameargs);
-        }
-        println!("{:?}", mineprogram);
-        mineprogram.spawn().expect("Failed to execute Minecraft!");
+    let mut mineprogram = if gamemode {
+        Command::new("gamemoderun")
+    } else {
+        Command::new(jvm)
+    };
+
+    if gamemode {
+        mineprogram.arg(jvm);
+    }
+    mineprogram
+        .arg(format!("-Xmx{}M", ram * 1024.))
+        .args(jvmargs)
+        .arg("-cp")
+        .arg(libraries_list)
+        .args(version_jvm_args);
+
+    mineprogram.arg(mainclass).args(version_game_args);
+
+    println!("{:?}", mineprogram);
+    mineprogram.spawn().expect("Failed to execute Minecraft!");
 
     Ok(())
 }
@@ -363,4 +419,30 @@ pub fn getinstalledversions() -> Vec<String> {
             }
         })
         .collect::<Vec<_>>()
+}
+
+fn getgameargs(arguments: Vec<String>, gamedata: &Vec<String>) -> Vec<String> {
+    let mut version_game_args = vec![];
+    for i in arguments {
+        println!("{i}");
+        match i.as_str() {
+            "${auth_player_name}" => version_game_args.push(gamedata[0].clone()),
+            "${version_name}" => version_game_args.push(gamedata[1].clone()),
+            "${game_directory}" => version_game_args.push(gamedata[2].clone()),
+            "${assets_root}" => version_game_args.push(gamedata[3].clone()),
+            "${assets_index_name}" => version_game_args.push(gamedata[4].clone()),
+            "${auth_uuid}" => version_game_args.push(gamedata[5].clone()),
+            "${auth_access_token}" => version_game_args.push(gamedata[6].clone()),
+            "${user_properties}" => version_game_args.push(gamedata[7].clone()),
+            "${user_type}" => version_game_args.push(gamedata[8].clone()),
+            "${version_type}" =>                     version_game_args.push(gamedata[9].clone()),
+
+
+                
+            
+            "--demo" => {}
+            _ => version_game_args.push(String::from(i.to_owned())),
+        }
+    }
+    version_game_args
 }
