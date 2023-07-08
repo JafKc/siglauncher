@@ -272,12 +272,12 @@ pub async fn start(
         for i in moddedgameargs {
             str_moddedgameargs.push(i.as_str().unwrap_or("").to_owned())
         }
-        if needs_user_properties{
+        if needs_user_properties {
             str_moddedgameargs.push("--userProperties".to_string());
             str_moddedgameargs.push("{}".to_string());
         }
         println!("{:?}", str_arguments);
-        version_game_args = getgameargs(str_arguments, &gamedata.clone());
+        version_game_args = getgameargs(str_arguments, &gamedata);
         version_game_args.extend_from_slice(&getgameargs(str_moddedgameargs, &gamedata))
     } else if let Some(arguments) = p["minecraftArguments"].as_str() {
         let gamedata = vec![
@@ -421,7 +421,7 @@ pub fn getinstalledversions() -> Vec<String> {
         .collect::<Vec<_>>()
 }
 
-fn getgameargs(arguments: Vec<String>, gamedata: &Vec<String>) -> Vec<String> {
+fn getgameargs(arguments: Vec<String>, gamedata: &[String]) -> Vec<String> {
     let mut version_game_args = vec![];
     for i in arguments {
         println!("{i}");
@@ -435,13 +435,10 @@ fn getgameargs(arguments: Vec<String>, gamedata: &Vec<String>) -> Vec<String> {
             "${auth_access_token}" => version_game_args.push(gamedata[6].clone()),
             "${user_properties}" => version_game_args.push(gamedata[7].clone()),
             "${user_type}" => version_game_args.push(gamedata[8].clone()),
-            "${version_type}" =>                     version_game_args.push(gamedata[9].clone()),
+            "${version_type}" => version_game_args.push(gamedata[9].clone()),
 
-
-                
-            
             "--demo" => {}
-            _ => version_game_args.push(String::from(i.to_owned())),
+            _ => version_game_args.push(i.to_owned()),
         }
     }
     version_game_args

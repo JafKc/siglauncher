@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
 use std::env::{self, set_current_dir};
 use std::fmt::Debug;
-use std::fs::{File, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 
@@ -90,6 +90,7 @@ enum Message {
     UserChanged(String),
     VerChanged(String),
     LaunchPressed,
+    OpenGameFolder,
     GithubPressed,
     InstallationScreenButton,
 
@@ -140,11 +141,11 @@ impl Application for Siglauncher {
 
         if let Some(jvms) = p["JVMs"].as_array() {
             for jvm in jvms {
-                jvmnames.push(jvm["name"].to_string());
+                jvmnames.push(jvm["name"].as_str().unwrap().to_owned());
                 if jvm["name"] == p["currentjavaname"] {
-                    currentjvm.push(jvm["name"].to_string());
-                    currentjvm.push(jvm["path"].to_string());
-                    currentjvm.push(jvm["flags"].to_string());
+                    currentjvm.push(jvm["name"].as_str().unwrap().to_owned());
+                    currentjvm.push(jvm["path"].as_str().unwrap().to_owned());
+                    currentjvm.push(jvm["flags"].as_str().unwrap().to_owned());
                 }
             }
         }
@@ -155,18 +156,18 @@ impl Application for Siglauncher {
 
         if let Some(directories) = p["Game profile folders"].as_array() {
             for directory in directories {
-                directorynames.push(directory["name"].to_string());
+                directorynames.push(directory["name"].as_str().unwrap().to_owned());
                 if directory["name"] == p["currentprofilefolder"] {
-                    currentprofilefolder.push(directory["name"].to_string());
-                    currentprofilefolder.push(directory["path"].to_string());
+                    currentprofilefolder.push(directory["name"].as_str().unwrap().to_owned());
+                    currentprofilefolder.push(directory["path"].as_str().unwrap().to_owned());
                 }
             }
         }
 
         (
             Siglauncher {
-                username: p["username"].to_string().replace('\"', ""),
-                version: Some(p["version"].to_string().replace('\"', "")),
+                username: p["username"].as_str().unwrap().to_owned(),
+                version: Some(p["version"].as_str().unwrap().to_owned()),
                 screen: 1,
                 versions: backend::getinstalledversions(),
                 ram: p["ram"].as_f64().unwrap(),
@@ -175,7 +176,7 @@ impl Application for Siglauncher {
                 currentjavaname: currentjavaname.to_string(),
                 gamemodelinux: p["gamemodelinux"].as_bool().unwrap(),
                 showallversions: p["showallversions"].as_bool().unwrap(),
-                currentprofilefolder: p["currentprofilefolder"].to_string(),
+                currentprofilefolder: p["currentprofilefolder"].as_str().unwrap().to_owned(),
                 pdirectories: directorynames,
                 profilefolder: currentprofilefolder,
                 ..Default::default()
@@ -201,13 +202,13 @@ impl Application for Siglauncher {
                     let username = self.username.clone();
                     let version = Some(self.version.clone());
                     let java = self.jvm.clone();
-                    let jvmargss = java[2].replace('\"', "");
+                    let jvmargss = java[2].clone();
                     let jvmargsvec = jvmargss.split(' ').map(|s| s.to_owned()).collect();
                     let ram = self.ram;
                     let gamemode = self.gamemodelinux;
                     let dprofile = self.profilefolder.clone();
                     println!("{}", dprofile[1]);
-                    let dprofilepath = dprofile[1].replace('\"', "");
+                    let dprofilepath = dprofile[1].clone();
 
                     let autojava = self.currentjavaname == *"\"Automatic\"";
 
@@ -218,7 +219,7 @@ impl Application for Siglauncher {
                             match backend::start(
                                 username.as_str(),
                                 version.unwrap().expect("a").as_str(),
-                                java[1].replace('\"', "").as_str(),
+                                java[1].as_str(),
                                 jvmargsvec,
                                 ram,
                                 gamemode,
@@ -294,12 +295,12 @@ impl Application for Siglauncher {
                     self.downloadlist.clear();
                     self.fabricdownloadlist.clear();
                     for i in &a[0] {
-                        let ii = i.replace('\"', "");
-                        self.downloadlist.push(ii);
+                        let ii = i;
+                        self.downloadlist.push(ii.to_string());
                     }
                     for i in &a[1] {
-                        let ii = i.replace('\"', "");
-                        self.fabricdownloadlist.push(ii);
+                        let ii = i;
+                        self.fabricdownloadlist.push(ii.to_string());
                     }
                 }
 
@@ -319,8 +320,8 @@ impl Application for Siglauncher {
                 // 1 for vanilla, 2 for fabric and 3 for forge
                 self.state = String::from("Downloading version...");
                 let ver = match versiontype {
-                    1 => self.versiontodownload.clone().replace('\"', ""),
-                    2 => self.fabricversiontodownload.clone().replace('\"', ""),
+                    1 => self.versiontodownload.clone(),
+                    2 => self.fabricversiontodownload.clone(),
                     _ => panic!("Version type doesn't exists!"),
                 };
                 Command::perform(
@@ -381,7 +382,7 @@ impl Application for Siglauncher {
 
                     if let Some(jvms) = data["JVMs"].as_array() {
                         for jvm in jvms {
-                            updatedjvmlist.push(jvm["name"].to_string());
+                            updatedjvmlist.push(jvm["name"].as_str().unwrap().to_owned());
                         }
                     }
                     self.jvms = updatedjvmlist;
@@ -414,12 +415,12 @@ impl Application for Siglauncher {
 
                 if let Some(jvms) = p["JVMs"].as_array() {
                     for jvm in jvms {
-                        if jvm["name"] == value.replace('\"', "") {
-                            newjvm.push(jvm["name"].to_string());
-                            newjvm.push(jvm["path"].to_string());
-                            newjvm.push(jvm["flags"].to_string());
+                        if jvm["name"] == value {
+                            newjvm.push(jvm["name"].as_str().unwrap().to_owned());
+                            newjvm.push(jvm["path"].as_str().unwrap().to_owned());
+                            newjvm.push(jvm["flags"].as_str().unwrap().to_owned());
 
-                            newjvmname = jvm["name"].to_string();
+                            newjvmname = jvm["name"].as_str().unwrap().to_owned();
                         }
                     }
                 }
@@ -462,7 +463,8 @@ impl Application for Siglauncher {
 
                     if let Some(directories) = data["Game profile folders"].as_array() {
                         for directory in directories {
-                            updateddirectorieslist.push(directory["name"].to_string());
+                            let directoryname = directory["name"].as_str().unwrap().to_owned();
+                            updateddirectorieslist.push(directoryname);
                         }
                     }
                     self.pdirectories = updateddirectorieslist;
@@ -495,11 +497,11 @@ impl Application for Siglauncher {
 
                 if let Some(dprofiles) = p["Game profile folders"].as_array() {
                     for dprofile in dprofiles {
-                        if dprofile["name"] == value.replace('\"', "") {
-                            newprofile.push(dprofile["name"].to_string());
-                            newprofile.push(dprofile["path"].to_string());
+                        if dprofile["name"] == value {
+                            newprofile.push(dprofile["name"].as_str().unwrap().to_owned());
+                            newprofile.push(dprofile["path"].as_str().unwrap().to_owned());
 
-                            newprofilename = dprofile["name"].to_string();
+                            newprofilename = dprofile["name"].as_str().unwrap().to_owned();
                         }
                     }
                 }
@@ -518,6 +520,24 @@ impl Application for Siglauncher {
             }
             Message::ShowVersionsChanged(bool) => {
                 self.showallversions = bool;
+                Command::none()
+            }
+            Message::OpenGameFolder => {
+                let mc_dir = match std::env::consts::OS {
+                    "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
+                    "windows" => format!(
+                        "{}/AppData/Roaming/.minecraft",
+                        std::env::var("USERPROFILE").unwrap().replace('\\', "/")
+                    ),
+                    _ => panic!("System not supported."),
+                };
+                if !Path::new(&mc_dir).is_dir() && fs::create_dir_all(&mc_dir).is_err() {
+                    println!("Failed to create game folder")
+                }
+
+                if let Err(err) = open::that(mc_dir) {
+                    println!("Failed to open game folder: {}", err);
+                }
                 Command::none()
             }
         }
@@ -596,6 +616,8 @@ impl Application for Siglauncher {
                 ]
                 .spacing(5),
                 //username and version input
+                row![
+                container(
                 column![
                     text("Username:"),
                     text_input("Username", &self.username)
@@ -605,15 +627,16 @@ impl Application for Siglauncher {
                     text("Version:"),
                     pick_list(
                         &self.versions,
-                        Some(format!("{:?}", &self.version.as_ref().unwrap()))
-                            .map(|s| s.replace('\"', "")),
+                        self.version.clone(),
                         Message::VerChanged,
                     )
                     .placeholder("Select a version")
                     .width(285)
                     .text_size(25)
                 ]
-                .spacing(10),
+                .spacing(10)).style(theme::Container::BlackContainer).padding(10), container(column![
+                    button(text("Open game folder").size(20).horizontal_alignment(alignment::Horizontal::Center)).width(250).height(30).on_press(Message::OpenGameFolder),
+                ].spacing(10)).style(theme::Container::BlackContainer).padding(20)].spacing(15),
                 //launchbutton
                 button(
                     text("Launch")
@@ -639,7 +662,7 @@ impl Application for Siglauncher {
                     text("Vanilla"),
                 pick_list(
                     self.downloadlist.clone(),
-                    Some(format!("{:?}", &self.versiontodownload)).map(|s| s.replace('\"', "")),
+                    Some(self.versiontodownload.clone()),
                     Message::DownloadChanged,
                 )
                 .placeholder("Select a version")
@@ -662,7 +685,7 @@ impl Application for Siglauncher {
                         text("Fabric"),
                     pick_list(
                         self.fabricdownloadlist.clone(),
-                        Some(format!("{:?}", &self.fabricversiontodownload)).map(|s| s.replace('\"', "")),
+                        Some(self.fabricversiontodownload.clone()),
                         Message::FabricDownloadChanged,
                     )
                     .placeholder("Select a version")
@@ -701,7 +724,7 @@ impl Application for Siglauncher {
                                 text("JVM:").horizontal_alignment(alignment::Horizontal::Center),
                                 pick_list(
                                     &self.jvms,
-                                    Some(&self.currentjavaname).map(|s| s.replace('\"', "")),
+                                    Some(self.currentjavaname.clone()),
                                     Message::JVMChanged
                                 )
                                 .width(250)
@@ -723,7 +746,7 @@ impl Application for Siglauncher {
                                     .horizontal_alignment(alignment::Horizontal::Center),
                                 pick_list(
                                     &self.pdirectories,
-                                    Some(&self.currentprofilefolder).map(|s| s.replace('\"', "")),
+                                    Some(self.currentprofilefolder.clone()),
                                     Message::ProfileFChanged
                                 )
                                 .width(250)
@@ -988,9 +1011,8 @@ fn updatesettingsfile(
     let mut data: Value = serde_json::from_str(&contents)?;
 
     data["ram"] = serde_json::Value::Number(Number::from_f64(ram).unwrap());
-    data["currentjavaname"] = serde_json::Value::String(currentjvm.replace('\"', ""));
-    data["currentprofilefolder"] =
-        serde_json::Value::String(currentprofilefolder.replace('\"', ""));
+    data["currentjavaname"] = serde_json::Value::String(currentjvm);
+    data["currentprofilefolder"] = serde_json::Value::String(currentprofilefolder);
     data["gamemodelinux"] = serde_json::Value::Bool(gamemode);
     data["showallversions"] = serde_json::Value::Bool(showallversions);
 

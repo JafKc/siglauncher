@@ -297,12 +297,12 @@ pub async fn getversionlist(
     if let Some(versions) = p["versions"].as_array() {
         if showallversions {
             for i in versions {
-                vanillaversionlist.push(i["id"].to_string())
+                vanillaversionlist.push(i["id"].as_str().unwrap().to_owned())
             }
         } else {
             for i in versions {
                 if i["type"] == "release" {
-                    vanillaversionlist.push(i["id"].to_string())
+                    vanillaversionlist.push(i["id"].as_str().unwrap().to_owned())
                 }
             }
         }
@@ -323,12 +323,12 @@ pub async fn getversionlist(
     if let Some(versions) = p.as_array() {
         if showallversions {
             for i in versions {
-                fabricversionlist.push(i["version"].to_string())
+                fabricversionlist.push(i["version"].as_str().unwrap().to_owned())
             }
         } else {
             for i in versions {
                 if i["stable"] == true {
-                    fabricversionlist.push(i["version"].to_string())
+                    fabricversionlist.push(i["version"].as_str().unwrap().to_owned())
                 }
             }
         }
@@ -431,7 +431,7 @@ pub async fn downloadversionjson(
                             .await?;
 
                         let jfilelocation = format!("{}/{}.json", foldertosave, version);
-                        fs::create_dir_all(&foldertosave).unwrap();
+                        fs::create_dir_all(foldertosave).unwrap();
                         let mut jfile = File::create(jfilelocation).unwrap();
 
                         jfile.write_all(&versionjson).unwrap();
@@ -470,7 +470,7 @@ pub async fn downloadversionjson(
                 .await?;
 
             let jfilelocation = format!("{}/{}-Fabric.json", foldertosave, version);
-            fs::create_dir_all(&foldertosave).unwrap();
+            fs::create_dir_all(foldertosave).unwrap();
             let mut jfile = File::create(jfilelocation).unwrap();
 
             jfile.write_all(&verjson).unwrap();

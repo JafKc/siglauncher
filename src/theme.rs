@@ -346,7 +346,7 @@ impl menu::StyleSheet for Theme {
         match style {
             Menu::Default => menu::Appearance {
                 text_color: Color::from_rgb(0.90, 0.90, 0.90),
-                background: iced::Background::Color(Color::from_rgb8(49, 50, 68)),
+                background: iced::Background::Color(Color::from_rgb8(55, 55, 73)),
                 border_width: 0.0,
                 border_radius: 15.0,
                 border_color: Color::from_rgb(0.90, 0.90, 0.90),
