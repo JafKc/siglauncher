@@ -36,12 +36,8 @@ Releases may be outdated and lack newer features.
 ### Mods
 For mods, you can choose between [Fabric](https://fabricmc.net/) or [Forge](https://files.minecraftforge.net/net/minecraftforge/forge/). Download mods from [Mondrith](https://modrinth.com/mods) and paste them into the mods folder within your Minecraft directory.
 
-### Java warning
-Siglauncher doesn't provide Java, you can download Java from the following links:
+You can download Fabric versions from the launcher. If you want to use Forge then download it from [here](https://files.minecraftforge.net/net/minecraftforge/forge/).
 
-[java 17](https://adoptium.net/temurin/releases/?version=17), for newer versions of Minecraft
-
-[java 8](https://adoptium.net/temurin/releases/?version=8), for older versions (before 1.15)
 
 ### GameMode warning
 To make Feral's GameMode setting work, you need to have gamemode installed. To install it, type one of the following commands in your terminal:
