@@ -210,7 +210,7 @@ impl Application for Siglauncher {
                     println!("{}", dprofile[1]);
                     let dprofilepath = dprofile[1].clone();
 
-                    let autojava = self.currentjavaname == *"\"Automatic\"";
+                    let autojava = self.currentjavaname == "Automatic";
 
                     self.state = String::from("Launching...");
 
