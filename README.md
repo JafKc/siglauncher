@@ -2,6 +2,8 @@
 This is Siglauncher, a Minecraft launcher made with Rust and the Iced GUI library. 
 The launcher is compatible with Vanilla, Fabric, and Forge, and is designed to run on both Windows and Linux.
 
+Note: For now the launcher only works in offline mode.
+
 
 ### Features
 * Simple and intuitive GUI
@@ -54,6 +56,3 @@ For Fedora-based distros:
 ```bash
 dnf install gamemode
 ```
-
-
-Note: The launcher only works in offline mode; it is not yet possible to log in with a Microsoft account.
