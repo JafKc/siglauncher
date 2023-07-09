@@ -61,7 +61,7 @@ pub async fn start(
     println!("{}", &mc_dir);
     let assets_dir = format!("{}/assets", &mc_dir);
     let game_version = game_version;
-    let uuid = "9791bffa968538928aa0b3ff397fd54f";
+    let uuid = "0";
 
     let versionpath = format!("{}/versions/{}/{}.jar", &mc_dir, game_version, game_version);
 
@@ -258,19 +258,23 @@ pub async fn start(
         let mut needs_user_properties = true;
         for i in arguments {
             if i.is_string() {
-                if i.as_str().unwrap_or("").contains("--userProperties") {
+                if i.as_str().unwrap().contains("--userProperties") {
                     needs_user_properties = false;
                 }
                 str_arguments.push(i.as_str().unwrap_or("").to_owned())
             } else {
-                if i.as_str().unwrap_or("").contains("--userProperties") {
+                if i["value"].as_str().unwrap_or("").contains("--userProperties") {
                     needs_user_properties = false;
                 }
-                str_arguments.push(i["value"].as_str().unwrap_or("").to_owned())
+                if i["value"].is_string(){
+                    str_arguments.push(i["value"].as_str().unwrap().to_owned())
+                }
             }
         }
         for i in moddedgameargs {
-            str_moddedgameargs.push(i.as_str().unwrap_or("").to_owned())
+            if i.is_string(){
+                str_moddedgameargs.push(i.as_str().unwrap_or("").to_owned())
+            }
         }
         if needs_user_properties {
             str_moddedgameargs.push("--userProperties".to_string());
@@ -424,7 +428,6 @@ pub fn getinstalledversions() -> Vec<String> {
 fn getgameargs(arguments: Vec<String>, gamedata: &[String]) -> Vec<String> {
     let mut version_game_args = vec![];
     for i in arguments {
-        println!("{i}");
         match i.as_str() {
             "${auth_player_name}" => version_game_args.push(gamedata[0].clone()),
             "${version_name}" => version_game_args.push(gamedata[1].clone()),
@@ -432,6 +435,8 @@ fn getgameargs(arguments: Vec<String>, gamedata: &[String]) -> Vec<String> {
             "${assets_root}" => version_game_args.push(gamedata[3].clone()),
             "${assets_index_name}" => version_game_args.push(gamedata[4].clone()),
             "${auth_uuid}" => version_game_args.push(gamedata[5].clone()),
+            "${clientid}" => version_game_args.push(gamedata[5].clone()),
+            "${auth_xuid}" => version_game_args.push(gamedata[5].clone()),
             "${auth_access_token}" => version_game_args.push(gamedata[6].clone()),
             "${user_properties}" => version_game_args.push(gamedata[7].clone()),
             "${user_type}" => version_game_args.push(gamedata[8].clone()),
