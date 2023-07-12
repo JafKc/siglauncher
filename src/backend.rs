@@ -85,9 +85,9 @@ pub async fn start(
     let mut libraries_list = libmanager(&p, operationalsystem, &mc_dir);
     let mut version_game_args = vec![];
     let mut moddedgameargs = vec![];
-    //let mut oldmoddedgameargs_str = String::new();
 
     let mut ismodded = false;
+    //for modded versions
     if game_version.to_lowercase().contains("fabric")
         || game_version.to_lowercase().contains("forge")
     {
@@ -121,9 +121,7 @@ pub async fn start(
             for i in arguments {
                 moddedgameargs.push(i.to_owned())
             }
-        } // else if let Some(arguments) = vjson["minecraftArguments"].as_str() {
-          //  oldmoddedgameargs_str = arguments.to_string();
-          // }
+        }
 
         libraries_list.push_str(&libmanager(&vjson, operationalsystem, &mc_dir));
 
@@ -132,21 +130,11 @@ pub async fn start(
                 1,
                 &vjson,
                 &format!("{}/versions/{}", &mc_dir, &game_version),
-                &vanillaversion.to_owned(),
+                &game_version.to_owned(),
             )
             .await
             .unwrap();
-            fs::rename(
-                &format!(
-                    "{}/versions/{}/{}.jar",
-                    &mc_dir, &game_version, vanillaversion
-                ),
-                &format!(
-                    "{}/versions/{}/{}.jar",
-                    &mc_dir, &game_version, game_version
-                ),
-            )
-            .unwrap();
+
             if let Some(libraries) = vjson["libraries"].as_array() {
                 installer::downloadlibraries(
                     &mc_dir,
@@ -157,7 +145,34 @@ pub async fn start(
                 .await
                 .unwrap()
             }
+
+            installer::downloadassets(&mc_dir, &vjson).await.unwrap();
         }
+    }
+    //for custom versions
+    if !Path::new(&versionpath).exists() || fs::metadata(&versionpath).unwrap().len() == 0 {
+        installer::downloadversionjar(
+            1,
+            &p,
+            &format!("{}/versions/{}", &mc_dir, &game_version),
+            &game_version.to_owned(),
+        )
+        .await
+        .unwrap();
+        println!("Version jar has been downloaded.");
+
+        if let Some(libraries) = p["libraries"].as_array() {
+            installer::downloadlibraries(
+                &mc_dir,
+                operationalsystem,
+                libraries,
+                &format!("{}/versions/{}", &mc_dir, &game_version),
+            )
+            .await
+            .unwrap()
+        }
+
+        installer::downloadassets(&mc_dir, &p).await.unwrap();
     }
 
     let jvm = match autojava {
@@ -176,7 +191,9 @@ pub async fn start(
                 vanillajson.read_to_string(&mut vjsoncontent).unwrap();
                 p = serde_json::from_str(&vjsoncontent).unwrap();
             }
-            if p["javaVersion"]["majorVersion"].as_i64().unwrap() > 8 {
+            if p["javaVersion"]["majorVersion"].as_i64().unwrap() > 8
+                || p["javaVersion"]["majorVersion"].as_i64().unwrap() == 0
+            {
                 if Path::new(&autojavapaths[0]).exists() {
                     jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
                         .split(' ').map(|s| s.to_owned()).collect();
@@ -263,16 +280,20 @@ pub async fn start(
                 }
                 str_arguments.push(i.as_str().unwrap_or("").to_owned())
             } else {
-                if i["value"].as_str().unwrap_or("").contains("--userProperties") {
+                if i["value"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("--userProperties")
+                {
                     needs_user_properties = false;
                 }
-                if i["value"].is_string(){
+                if i["value"].is_string() {
                     str_arguments.push(i["value"].as_str().unwrap().to_owned())
                 }
             }
         }
         for i in moddedgameargs {
-            if i.is_string(){
+            if i.is_string() {
                 str_moddedgameargs.push(i.as_str().unwrap_or("").to_owned())
             }
         }
@@ -280,7 +301,6 @@ pub async fn start(
             str_moddedgameargs.push("--userProperties".to_string());
             str_moddedgameargs.push("{}".to_string());
         }
-        println!("{:?}", str_arguments);
         version_game_args = getgameargs(str_arguments, &gamedata);
         version_game_args.extend_from_slice(&getgameargs(str_moddedgameargs, &gamedata))
     } else if let Some(arguments) = p["minecraftArguments"].as_str() {
@@ -326,7 +346,10 @@ pub async fn start(
 
     mineprogram.arg(mainclass).args(version_game_args);
 
-    println!("{:?}", mineprogram);
+    println!(
+        "Launching with the following command: \n{:?}\n\n",
+        mineprogram
+    );
     mineprogram.spawn().expect("Failed to execute Minecraft!");
 
     Ok(())

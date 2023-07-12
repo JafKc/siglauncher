@@ -142,29 +142,40 @@ pub async fn downloadlibraries(
                 let libpath = format!("{}{}", lib_dir, lib);
 
                 if !Path::exists(Path::new(&libpath)) {
-                    let unmodifiedurl = library["downloads"]["artifacts"]["url"]
-                        .as_str()
-                        .unwrap_or(library["url"].as_str().unwrap());
-                    let mut url = unmodifiedurl.to_owned();
-                    if unmodifiedurl == "https://maven.fabricmc.net/" {
-                        url = format!("{}{}", url, lib)
+                    let unmodifiedurl = if library["downloads"]["artifacts"]["url"].is_string() {
+                        library["downloads"]["artifacts"]["url"].as_str().unwrap()
+                    } else if library["url"].is_string() {
+                        library["url"].as_str().unwrap()
+                    } else {
+                        println!("Library url not found!");
+                        ""
+                    };
+
+                    let url = if unmodifiedurl == "https://maven.fabricmc.net/" {
+                        format!("{}{}", unmodifiedurl, lib)
+                    } else {
+                        unmodifiedurl.to_owned()
+                    };
+
+                    if !url.is_empty() {
+                        println!("Downloading library to {}", &libpath);
+                        let libtodownload = reqwest::Client::new()
+                            .get(url)
+                            .send()
+                            .await
+                            .unwrap()
+                            .bytes()
+                            .await
+                            .unwrap();
+
+                        let directorytocreate = Path::new(&libpath).parent().unwrap();
+                        fs::create_dir_all(directorytocreate).unwrap();
+                        let mut newlib = File::create(&libpath).unwrap();
+                        newlib.write_all(&libtodownload).unwrap();
+                        println!("Downloaded successfully.");
+                    } else {
+                        println!("Skipping.")
                     }
-
-                    println!("Downloading library to {}", &libpath);
-                    let libtodownload = reqwest::Client::new()
-                        .get(url)
-                        .send()
-                        .await
-                        .unwrap()
-                        .bytes()
-                        .await
-                        .unwrap();
-
-                    let directorytocreate = Path::new(&libpath).parent().unwrap();
-                    fs::create_dir_all(directorytocreate).unwrap();
-                    let mut newlib = File::create(&libpath).unwrap();
-                    newlib.write_all(&libtodownload).unwrap();
-                    println!("Downloaded successfully.");
                 } else {
                     println!("Library {} exists. Skipping.", &libpath)
                 }
@@ -525,7 +536,8 @@ pub async fn downloadversionjar(
     Ok(())
 }
 
-async fn downloadassets(mc_dir: &String, p: &Value) -> Result<(), reqwest::Error> {
+pub async fn downloadassets(mc_dir: &String, p: &Value) -> Result<(), reqwest::Error> {
+    println!("Downloading asset index...");
     let versionindex = reqwest::Client::new()
         .get(p["assetIndex"]["url"].as_str().unwrap())
         .send()
