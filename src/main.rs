@@ -20,11 +20,6 @@ struct JVMs {
     path: String,
     flags: String,
 }
-#[derive(Serialize)]
-struct GameWorkingDirectory {
-    name: String,
-    path: String,
-}
 
 #[derive(Default, Serialize, Deserialize)]
 struct Siglauncher {
@@ -52,8 +47,6 @@ struct Siglauncher {
     fabricversiontodownload: String,
     #[serde(skip_serializing)]
     pdirectories: Vec<String>,
-    #[serde(skip_serializing)]
-    profilefolder: Vec<String>,
 
     //add jvm
     jvmaddname: String,
@@ -61,8 +54,7 @@ struct Siglauncher {
     jvmaddflags: String,
     //add directory profile
     daddname: String,
-    daddpath: String,
-
+    //
     state: String,
 
     showallversions: bool,
@@ -118,7 +110,6 @@ enum Message {
     AddJVM,
 
     Directoryname(String),
-    Directorypath(String),
     AddDirectory,
 }
 
@@ -151,18 +142,26 @@ impl Application for Siglauncher {
         }
         let currentjavaname = &currentjvm[0];
 
-        let mut currentprofilefolder = Vec::new();
-        let mut directorynames: Vec<String> = Vec::new();
+        let profileslocation = format!("{}/siglauncher_profiles", backend::get_minecraft_dir());
 
-        if let Some(directories) = p["Game profile folders"].as_array() {
-            for directory in directories {
-                directorynames.push(directory["name"].as_str().unwrap().to_owned());
-                if directory["name"] == p["currentprofilefolder"] {
-                    currentprofilefolder.push(directory["name"].as_str().unwrap().to_owned());
-                    currentprofilefolder.push(directory["path"].as_str().unwrap().to_owned());
-                }
-            }
+        if !Path::new(&profileslocation).exists() {
+            fs::create_dir_all(&profileslocation).unwrap()
         }
+
+        let entries = fs::read_dir(profileslocation).unwrap();
+
+        let mut directorynames = entries
+            .filter_map(|entry| {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    Some(path.file_name().unwrap().to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        directorynames.push("Default".to_string());
 
         (
             Siglauncher {
@@ -178,7 +177,6 @@ impl Application for Siglauncher {
                 showallversions: p["showallversions"].as_bool().unwrap(),
                 currentprofilefolder: p["currentprofilefolder"].as_str().unwrap().to_owned(),
                 pdirectories: directorynames,
-                profilefolder: currentprofilefolder,
                 ..Default::default()
             },
             Command::none(),
@@ -206,9 +204,7 @@ impl Application for Siglauncher {
                     let jvmargsvec = jvmargss.split(' ').map(|s| s.to_owned()).collect();
                     let ram = self.ram;
                     let gamemode = self.gamemodelinux;
-                    let dprofile = self.profilefolder.clone();
-                    println!("{}", dprofile[1]);
-                    let dprofilepath = dprofile[1].clone();
+                    let profilefolder = self.currentprofilefolder.clone();
 
                     let autojava = self.currentjavaname == "Automatic";
 
@@ -223,7 +219,7 @@ impl Application for Siglauncher {
                                 jvmargsvec,
                                 ram,
                                 gamemode,
-                                dprofilepath,
+                                profilefolder,
                                 autojava,
                             ) {
                                 Ok(()) => String::from("Launched!"),
@@ -437,45 +433,36 @@ impl Application for Siglauncher {
                 self.daddname = name;
                 Command::none()
             }
-            Message::Directorypath(dpath) => {
-                self.daddpath = dpath;
-                Command::none()
-            }
             Message::AddDirectory => {
-                if !self.daddname.is_empty() && !self.daddpath.is_empty() {
-                    set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
+                if !self.daddname.is_empty() {
+                    fs::create_dir_all(format!(
+                        "{}/siglauncher_profiles/{}",
+                        backend::get_minecraft_dir(),
+                        self.daddname
+                    ))
+                    .expect("Failed to create directory!");
 
-                    let mut file = File::open("launchsettings.json").unwrap();
-                    let mut contents = String::new();
-                    file.read_to_string(&mut contents).unwrap();
+                    let entries = fs::read_dir(format!(
+                        "{}/siglauncher_profiles",
+                        backend::get_minecraft_dir()
+                    ))
+                    .unwrap();
 
-                    let mut data: Value = serde_json::from_str(&contents).unwrap();
-                    let profilefolder = GameWorkingDirectory {
-                        name: self.daddname.clone(),
-                        path: self.daddpath.clone(),
-                    };
-                    if let Value::Array(arr) = &mut data["Game profile folders"] {
-                        arr.push(serde_json::json!(profilefolder));
-                        data["Game profile folders"] = serde_json::json!(arr)
-                    }
+                    let mut directorynames = entries
+                        .filter_map(|entry| {
+                            let path = entry.unwrap().path();
+                            if path.is_dir() {
+                                Some(path.file_name().unwrap().to_string_lossy().to_string())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
 
-                    let mut updateddirectorieslist = Vec::new();
+                    directorynames.push("Default".to_string());
 
-                    if let Some(directories) = data["Game profile folders"].as_array() {
-                        for directory in directories {
-                            let directoryname = directory["name"].as_str().unwrap().to_owned();
-                            updateddirectorieslist.push(directoryname);
-                        }
-                    }
-                    self.pdirectories = updateddirectorieslist;
-                    let serialized = serde_json::to_string_pretty(&data).unwrap();
+                    self.pdirectories = directorynames;
 
-                    let mut file = OpenOptions::new()
-                        .write(true)
-                        .truncate(true)
-                        .open("launchsettings.json")
-                        .unwrap();
-                    file.write_all(serialized.as_bytes()).unwrap();
                     self.screen = 3;
                     Command::none()
                 } else {
@@ -484,30 +471,7 @@ impl Application for Siglauncher {
                 }
             }
             Message::ProfileFChanged(value) => {
-                set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
-
-                let mut file = File::open("launchsettings.json").unwrap();
-                let mut fcontent = String::new();
-                file.read_to_string(&mut fcontent).unwrap();
-                let content = serde_json::from_str(&fcontent);
-                let p: Value = content.unwrap();
-
-                let mut newprofile: Vec<String> = Vec::new();
-                let mut newprofilename: String = String::new();
-
-                if let Some(dprofiles) = p["Game profile folders"].as_array() {
-                    for dprofile in dprofiles {
-                        if dprofile["name"] == value {
-                            newprofile.push(dprofile["name"].as_str().unwrap().to_owned());
-                            newprofile.push(dprofile["path"].as_str().unwrap().to_owned());
-
-                            newprofilename = dprofile["name"].as_str().unwrap().to_owned();
-                        }
-                    }
-                }
-
-                self.currentprofilefolder = newprofilename;
-                self.profilefolder = newprofile;
+                self.currentprofilefolder = value;
                 Command::none()
             }
             Message::GoDprofileMan => {
@@ -869,11 +833,6 @@ impl Application for Siglauncher {
                     .on_input(Message::Directoryname)
                     .size(25)
                     .width(250),
-                text("Directory profile path:"),
-                text_input("", &self.daddpath)
-                    .on_input(Message::Directorypath)
-                    .size(25)
-                    .width(250),
                 row![button(
                     text("Return")
                         .size(20)
@@ -927,11 +886,7 @@ fn checksettingsfile() {
             JVMs{name:"System Java".to_string(),path:"java".to_string(),flags:"-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3".to_string()}
         ];
 
-        let gamedirectories = vec![GameWorkingDirectory {
-            name: "Default".to_string(),
-            path: String::new(),
-        }];
-        let mut json = serde_json::json!({"JVMs" : jvm, "Game profile folders": gamedirectories});
+        let mut json = serde_json::json!({ "JVMs": jvm });
 
         if let Value::Object(map) = &mut json {
             map.insert(

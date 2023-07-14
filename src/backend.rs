@@ -27,22 +27,16 @@ pub async fn start(
 ) -> std::io::Result<()> {
     let operationalsystem = std::env::consts::OS;
     let player = player;
-    let mc_dir = match std::env::consts::OS {
-        "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
-        "windows" => format!(
-            "{}/AppData/Roaming/.minecraft",
-            std::env::var("USERPROFILE").unwrap().replace('\\', "/")
-        ),
-        _ => panic!("System not supported."),
-    };
+    let mc_dir = get_minecraft_dir();
 
-    let gamedir = if gamedirectory.is_empty() {
+    let gamedir = if gamedirectory == *"Default" {
         env::set_current_dir(&mc_dir).expect("Failed to open profile folder!");
-        &mc_dir
+        mc_dir.clone()
     } else {
-        fs::create_dir_all(&gamedirectory).unwrap();
-        env::set_current_dir(&gamedirectory).expect("Failed to open profile folder!");
-        &gamedirectory
+        let gamedirpath = format!("{}/siglauncher_profiles/{}", mc_dir, gamedirectory);
+        fs::create_dir_all(&gamedirpath).unwrap();
+        env::set_current_dir(&gamedirpath).expect("Failed to open profile folder!");
+        gamedirpath
     };
 
     let autojavapaths = if std::env::consts::OS == "windows" {
@@ -470,4 +464,15 @@ fn getgameargs(arguments: Vec<String>, gamedata: &[String]) -> Vec<String> {
         }
     }
     version_game_args
+}
+
+pub fn get_minecraft_dir() -> String {
+    match std::env::consts::OS {
+        "linux" => format!("{}/.minecraft", std::env::var("HOME").unwrap()),
+        "windows" => format!(
+            "{}/AppData/Roaming/.minecraft",
+            std::env::var("USERPROFILE").unwrap().replace('\\', "/")
+        ),
+        _ => panic!("System not supported."),
+    }
 }
