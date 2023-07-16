@@ -185,9 +185,8 @@ pub async fn start(
                 vanillajson.read_to_string(&mut vjsoncontent).unwrap();
                 p = serde_json::from_str(&vjsoncontent).unwrap();
             }
-            if p["javaVersion"]["majorVersion"].as_i64().unwrap() > 8
-                || p["javaVersion"]["majorVersion"].as_i64().unwrap() == 0
-            {
+            let requiredjavaversion = p["javaVersion"]["majorVersion"].as_i64().unwrap_or(1);
+            if requiredjavaversion > 8 || requiredjavaversion == 0 {
                 if Path::new(&autojavapaths[0]).exists() {
                     jvmargs = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1"
                         .split(' ').map(|s| s.to_owned()).collect();
