@@ -94,7 +94,6 @@ enum Message {
     FabricDownloadChanged(String),
 
     RamChanged(f64),
-    Apply,
     Return(i8),
     JVMChanged(String),
     ProfileFChanged(String),
@@ -265,20 +264,17 @@ impl Application for Siglauncher {
                 self.ram = ram;
                 Command::none()
             }
-            Message::Apply => {
-                updatesettingsfile(
-                    self.ram,
-                    self.currentjavaname.clone(),
-                    self.currentprofilefolder.clone(),
-                    self.gamemodelinux,
-                    self.showallversions,
-                )
-                .unwrap();
-                self.screen = 1;
-                Command::none()
-            }
             Message::Return(s) => {
-                self.versions = backend::getinstalledversions();
+                if self.screen == 3 {
+                    updatesettingsfile(
+                        self.ram,
+                        self.currentjavaname.clone(),
+                        self.currentprofilefolder.clone(),
+                        self.gamemodelinux,
+                        self.showallversions,
+                    )
+                    .unwrap();
+                }
                 self.screen = s;
                 self.state.clear();
                 Command::none()
@@ -333,7 +329,7 @@ impl Application for Siglauncher {
             Message::Downloaded(result) => {
                 self.state = result;
                 self.screen = 1;
-                backend::getinstalledversions();
+                self.versions = backend::getinstalledversions();
                 Command::none()
             }
             Message::GoJavaMan => {
@@ -755,7 +751,7 @@ impl Application for Siglauncher {
                             ]
                             .spacing(10),
                             row![
-                                text("Use Feral's GameMode (Linux only)")
+                                text("Use Feral GameMode (Linux only)")
                                     .horizontal_alignment(alignment::Horizontal::Center),
                                 toggler(
                                     String::new(),
@@ -772,23 +768,16 @@ impl Application for Siglauncher {
                     .padding(10)
                 ]
                 .spacing(15),
-                //savebutton
-                button(
-                    text("Save")
-                        .size(20)
-                        .horizontal_alignment(alignment::Horizontal::Center)
-                )
-                .width(135)
-                .height(30)
-                .on_press(Message::Apply)
             ]
             .spacing(15)
             .max_width(800),
 
             4 => column![
-                text("Add JVM")
+                text("Manage JVMs")
                     .size(50)
                     .horizontal_alignment(alignment::Horizontal::Center),
+                container(column![
+                text("Add"),
                 text("JVM name:"),
                 text_input("", &self.jvmaddname)
                     .on_input(Message::JVMname)
@@ -804,15 +793,6 @@ impl Application for Siglauncher {
                     .on_input(Message::JVMflags)
                     .size(25)
                     .width(250),
-                row![button(
-                    text("Return")
-                        .size(20)
-                        .horizontal_alignment(alignment::Horizontal::Center)
-                )
-                .width(135)
-                .height(30)
-                .on_press(Message::Return(3)),]
-                .spacing(25),
                 button(
                     text("Add")
                         .size(20)
@@ -820,28 +800,22 @@ impl Application for Siglauncher {
                 )
                 .width(135)
                 .height(30)
-                .on_press(Message::AddJVM)
+                .on_press(Message::AddJVM)].spacing(5)).style(theme::Container::BlackContainer).padding(15)
             ]
             .spacing(15)
             .max_width(800),
             5 => column![
-                text("Add Directory")
+                text("Manage directory profiles")
                     .size(50)
                     .horizontal_alignment(alignment::Horizontal::Center),
+                container(
+                    column![
+                text("Add"),
                 text("Directory profile name:"),
                 text_input("", &self.daddname)
                     .on_input(Message::Directoryname)
                     .size(25)
                     .width(250),
-                row![button(
-                    text("Return")
-                        .size(20)
-                        .horizontal_alignment(alignment::Horizontal::Center)
-                )
-                .width(135)
-                .height(30)
-                .on_press(Message::Return(3)),]
-                .spacing(25),
                 button(
                     text("Add")
                         .size(20)
@@ -849,7 +823,7 @@ impl Application for Siglauncher {
                 )
                 .width(135)
                 .height(30)
-                .on_press(Message::AddDirectory)
+                .on_press(Message::AddDirectory)].spacing(15)).style(theme::Container::BlackContainer).padding(15)
             ]
             .spacing(15)
             .max_width(800),
