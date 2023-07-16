@@ -3015,7 +3015,7 @@ dependencies = [
 
 [[package]]
 name = "siglauncher"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "iced",
  "image",
