@@ -2,7 +2,7 @@ use iced::overlay::menu;
 use iced::widget::{
     button, container, pick_list, scrollable, slider, svg, text, text_input, toggler,
 };
-use iced::{application, color, Color};
+use iced::{application, color, Background, Color};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Theme;
@@ -23,6 +23,7 @@ pub enum Text {
     Default,
     Peach,
     Green,
+    Red,
 }
 
 impl text::StyleSheet for Theme {
@@ -38,6 +39,9 @@ impl text::StyleSheet for Theme {
             },
             Text::Green => text::Appearance {
                 color: color!(166, 218, 149).into(),
+            },
+            Text::Red => text::Appearance {
+                color: color!(150, 0, 0).into(),
             },
         }
     }
@@ -57,8 +61,9 @@ impl container::StyleSheet for Theme {
         match style {
             Container::Default => container::Appearance::default(),
             Container::BlackContainer => container::Appearance {
-                background: Color::from_rgb8(49, 50, 68).into(),
-                border_radius: 25.0,
+                //background: Color::from_rgb8(49, 50, 68),
+                background: Some(Background::Color(Color::from_rgb8(49, 50, 68))),
+                border_radius: 25.0.into(),
                 ..Default::default()
             },
         }
@@ -79,19 +84,19 @@ impl button::StyleSheet for Theme {
     fn active(&self, style: &Self::Style) -> button::Appearance {
         match style {
             Button::Primary => button::Appearance {
-                background: Color::from_rgb8(30, 102, 245).into(),
-                border_radius: 15.0,
+                background: Some(Background::Color(Color::from_rgb8(30, 102, 245))),
+                border_radius: 15.0.into(),
                 border_width: 1.0,
                 border_color: color!(30, 102, 245),
                 ..Default::default()
             },
             Button::Secondary => button::Appearance {
-                background: Color::from_rgb8(5, 194, 112).into(),
-                border_radius: 15.0,
+                background: Some(Background::Color(Color::from_rgb8(5, 194, 112))),
+                border_radius: 15.0.into(),
                 ..Default::default()
             },
             Button::Transparent => button::Appearance {
-                background: Color::TRANSPARENT.into(),
+                background: Some(Background::Color(Color::TRANSPARENT)),
                 ..Default::default()
             },
         }
@@ -100,22 +105,22 @@ impl button::StyleSheet for Theme {
     fn hovered(&self, style: &Self::Style) -> button::Appearance {
         match style {
             Button::Primary => button::Appearance {
-                background: Color::from_rgb8(30, 102, 245).into(),
-                border_radius: 15.0,
+                background: Some(Background::Color(Color::from_rgb8(30, 102, 245))),
+                border_radius: 15.0.into(),
                 border_width: 1.0,
                 border_color: Color::from_rgb(0.90, 0.90, 0.90),
                 ..Default::default()
             },
             Button::Secondary => button::Appearance {
-                background: Color::from_rgb8(5, 194, 112).into(),
-                border_radius: 15.0,
+                background: Some(Background::Color(Color::from_rgb8(5, 194, 112))),
+                border_radius: 15.0.into(),
                 border_width: 1.0,
                 border_color: Color::from_rgb(0.90, 0.90, 0.90),
                 ..Default::default()
             },
             Button::Transparent => button::Appearance {
-                background: Color::from_rgb8(30, 30, 46).into(),
-                border_radius: 100.0,
+                background: Some(Background::Color(Color::TRANSPARENT)),
+                border_radius: 100.0.into(),
                 ..Default::default()
             },
         }
@@ -134,7 +139,7 @@ impl text_input::StyleSheet for Theme {
     fn active(&self, _style: &Self::Style) -> text_input::Appearance {
         text_input::Appearance {
             background: iced::Background::Color(Color::from_rgb8(49, 50, 68)),
-            border_radius: 15.0,
+            border_radius: 15.0.into(),
             border_width: 1.0,
             border_color: Color::from_rgb8(49, 50, 68),
             icon_color: Color::from_rgb(0.90, 0.90, 0.90),
@@ -144,7 +149,7 @@ impl text_input::StyleSheet for Theme {
     fn hovered(&self, _style: &Self::Style) -> text_input::Appearance {
         text_input::Appearance {
             background: iced::Background::Color(Color::from_rgb8(49, 50, 68)),
-            border_radius: 15.0,
+            border_radius: 15.0.into(),
             border_width: 1.0,
             border_color: Color::from_rgb(0.90, 0.90, 0.90),
             icon_color: Color::from_rgb(0.90, 0.90, 0.90),
@@ -154,7 +159,7 @@ impl text_input::StyleSheet for Theme {
     fn focused(&self, _style: &Self::Style) -> text_input::Appearance {
         text_input::Appearance {
             background: iced::Background::Color(Color::from_rgb8(49, 50, 68)),
-            border_radius: 15.0,
+            border_radius: 15.0.into(),
             border_width: 1.0,
             border_color: Color::from_rgb(0.90, 0.90, 0.90),
             icon_color: Color::from_rgb(0.90, 0.90, 0.90),
@@ -180,7 +185,7 @@ impl text_input::StyleSheet for Theme {
                 0x22 as f32 / 255.0,
                 0x25 as f32 / 255.0,
             )),
-            border_radius: 15.0,
+            border_radius: 15.0.into(),
             border_width: 1.0,
             border_color: Color::from_rgb(
                 0x20 as f32 / 255.0,
@@ -216,7 +221,7 @@ impl pick_list::StyleSheet for Theme {
                     0x25 as f32 / 255.0,
                 ),
                 handle_color: Color::from_rgb(0.90, 0.90, 0.90),
-                border_radius: 15.0,
+                border_radius: 15.0.into(),
                 border_width: 1.0,
                 border_color: Color::from_rgb8(49, 50, 68),
             },
@@ -233,7 +238,7 @@ impl pick_list::StyleSheet for Theme {
                 0x25 as f32 / 255.0,
             ),
             handle_color: Color::from_rgb(0.90, 0.90, 0.90),
-            border_radius: 15.0,
+            border_radius: 15.0.into(),
             border_width: 1.0,
             border_color: Color::from_rgb(0.90, 0.90, 0.90),
         }
@@ -271,7 +276,7 @@ impl slider::StyleSheet for Theme {
                 let handle = slider::Handle {
                     shape: slider::HandleShape::Rectangle {
                         width: 8,
-                        border_radius: 4.0,
+                        border_radius: 4.0.into(),
                     },
                     color: Color::from_rgb8(30, 102, 245),
                     border_color: Color::from_rgb8(30, 102, 245),
@@ -285,6 +290,7 @@ impl slider::StyleSheet for Theme {
                             Color::from_rgb(0.90, 0.90, 0.90),
                         ),
                         width: 2.0,
+                        border_radius: 4.0.into(),
                     },
                     handle: slider::Handle {
                         color: Color::from_rgb(
@@ -348,7 +354,7 @@ impl menu::StyleSheet for Theme {
                 text_color: Color::from_rgb(0.90, 0.90, 0.90),
                 background: iced::Background::Color(Color::from_rgb8(55, 55, 73)),
                 border_width: 0.0,
-                border_radius: 15.0,
+                border_radius: 15.0.into(),
                 border_color: Color::from_rgb(0.90, 0.90, 0.90),
                 selected_text_color: Color::from_rgb(0.90, 0.90, 0.90),
                 selected_background: iced::Background::Color(Color::from_rgb8(30, 102, 245)),
@@ -380,12 +386,12 @@ impl scrollable::StyleSheet for Theme {
                     0x22 as f32 / 255.0,
                     0x25 as f32 / 255.0,
                 ))),
-                border_radius: 15.0,
+                border_radius: 15.0.into(),
                 border_width: 0.0,
                 border_color: Color::TRANSPARENT,
                 scroller: scrollable::Scroller {
                     color: Color::from_rgb(0.90, 0.90, 0.90),
-                    border_radius: 2.0,
+                    border_radius: 2.0.into(),
                     border_width: 0.0,
                     border_color: Color::TRANSPARENT,
                 },
@@ -403,12 +409,12 @@ impl scrollable::StyleSheet for Theme {
                             0x22 as f32 / 255.0,
                             0x25 as f32 / 255.0,
                         ))),
-                        border_radius: 15.0,
+                        border_radius: 15.0.into(),
                         border_width: 0.0,
                         border_color: Color::TRANSPARENT,
                         scroller: scrollable::Scroller {
                             color: Color::from_rgb(0.90, 0.90, 0.90),
-                            border_radius: 2.0,
+                            border_radius: 2.0.into(),
                             border_width: 0.0,
                             border_color: Color::TRANSPARENT,
                         },
