@@ -317,7 +317,7 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
             println!("{:?}", game_command);
 
             println!("Launching game process");
-            if Path::new(game_command.get_program()).exists() {
+            if command_exists(game_command.get_program().to_str().unwrap()) {
                 let game_process_receiver = run_and_log_game(game_command);
                 return if let Ok(game_pr_rec) = game_process_receiver.await {
                     ((id, Progress::Started), State::GettingLogs(game_pr_rec))
@@ -652,3 +652,26 @@ fn modded(
     )
 }
 // } Launch functions
+
+
+fn command_exists(command_name: &str) -> bool {
+    if let Ok(paths) = env::var("PATH") {
+        let path_list: Vec<_> = env::split_paths(&paths).collect();
+
+        for path in path_list {
+            let command_path = path.join(command_name);
+
+            if let Ok(metadata) = fs::metadata(&command_path) {
+                if metadata.is_file() {
+                    return true;
+                }
+            }
+        }
+    }
+
+   // if Path::new(command_name).exists(){
+    //    return true;
+   // }
+
+    false
+}
