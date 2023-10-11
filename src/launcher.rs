@@ -142,7 +142,11 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                         (
                             id,
                             Progress::Checked(Some(Missing::VanillaVersion(
-                                p["downloads"]["client"]["url"].as_str().unwrap().to_string(), version_jar_file_path
+                                p["downloads"]["client"]["url"]
+                                    .as_str()
+                                    .unwrap()
+                                    .to_string(),
+                                version_jar_file_path,
                             ))),
                         ),
                         State::Idle,
@@ -242,12 +246,8 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                 || game_settings.game_version.to_lowercase().contains("forge")
                 || !p["inheritsFrom"].is_null()
             {
-                let (
-                    
-                    modded_jvm_args,
-                    modded_game_args,
-                    vanilla_version_library_list,
-                ) = modded(&p, &game_settings.game_version, gamedata.clone());
+                let (modded_jvm_args, modded_game_args, vanilla_version_library_list) =
+                    modded(&p, &game_settings.game_version, gamedata.clone());
                 version_jvm_args.extend(modded_jvm_args);
                 library_list.push_str(&vanilla_version_library_list);
 
@@ -490,8 +490,8 @@ fn automatic_java(mut p: Value, game_version: &String, ismodded: bool) -> (Strin
 
     let (autojava17path, autojava8path) = if std::env::consts::OS == "windows" {
         (
-            format!("{}/siglauncher_java/java17/bin/java.exe", mc_dir),
-            format!("{}/siglauncher_java/java8/bin/java.exe", mc_dir),
+            format!("{}/siglauncher_java/java17/bin/javaw.exe", mc_dir),
+            format!("{}/siglauncher_java/java8/bin/javaw.exe", mc_dir),
         )
     } else {
         (
@@ -644,7 +644,6 @@ fn modded(
 
     let vanilla_library_list = &libmanager(&vjson);
 
-
     (
         vanilla_version_jvm_args,
         modded_game_args,
@@ -652,7 +651,6 @@ fn modded(
     )
 }
 // } Launch functions
-
 
 fn command_exists(command_name: &str) -> bool {
     if let Ok(paths) = env::var("PATH") {
