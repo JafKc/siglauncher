@@ -669,9 +669,5 @@ fn command_exists(command_name: &str) -> bool {
         }
     }
 
-   // if Path::new(command_name).exists(){
-    //    return true;
-   // }
-
     false
 }

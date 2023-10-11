@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use self::widget::Element;
 use iced::{
     alignment, executor,

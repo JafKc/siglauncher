@@ -2,12 +2,12 @@
 name = "siglauncher"
 version = "0.5.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["JafKc"]
+repository = "https://github.com/JafKc/siglauncher"
 
 [dependencies]
 iced = {version = "0.10.0", features = ["tokio", "svg"]}
-reqwest = {version = "0.11.18"}
+reqwest = {version = "0.11.18", default-features = false}
 serde = { version = "1.0.167", features = ["derive"] }
 serde_json = "1.0.100"
 open = "5.0.0"
