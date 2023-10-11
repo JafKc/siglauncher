@@ -103,7 +103,7 @@ enum Message {
     GameWrapperCommandsChanged(String),
     ShowAllVersionsInDownloadListChanged(bool),
 
-    GotDownloadList(Vec<Vec<String>>),
+    GotDownloadList(Result<Vec<Vec<String>>, String>),
     VanillaVersionToDownloadChanged(String),
     FabricVersionToDownloadChanged(String),
     InstallVersion(downloader::VersionType),
@@ -300,16 +300,9 @@ impl Application for Siglauncher {
                                 launcher::Missing::VanillaVersion(url, path) => {
                                     self.launcher.state = LauncherState::Idle;
 
-                                    self.game_state_text =
-                                        String::from("Downloading required jar");
+                                    self.game_state_text = String::from("Downloading required jar");
                                     return Command::perform(
-                                        async move {
-                                            downloader::download_version_jar(
-                                                url, path
-                                            )
-                                            .await
-                                            
-                                        },
+                                        async move { downloader::download_version_jar(url, path).await },
                                         Message::VanillaJar,
                                     );
                                 }
@@ -391,12 +384,7 @@ impl Application for Siglauncher {
                         let show_all_versions = self.show_all_versions_in_download_list;
                         return Command::perform(
                             async move {
-                                match downloader::get_downloadable_version_list(show_all_versions)
-                                    .await
-                                {
-                                    Ok(a) => a,
-                                    Err(_) => vec![],
-                                }
+                                downloader::get_downloadable_version_list(show_all_versions).await
                             },
                             Message::GotDownloadList,
                         );
@@ -472,19 +460,24 @@ impl Application for Siglauncher {
                 self.show_all_versions_in_download_list = bool;
                 Command::none()
             }
-            Message::GotDownloadList(list) => {
-                self.needs_to_update_download_list = false;
-                if !list.is_empty() {
-                    self.vanilla_versions_download_list.clear();
-                    self.fabric_versions_download_list.clear();
-                    for i in &list[0] {
-                        let ii = i;
-                        self.vanilla_versions_download_list.push(ii.to_string());
+            Message::GotDownloadList(result) => {
+                match result {
+                    Ok(list) => {
+                        self.needs_to_update_download_list = false;
+                        if !list.is_empty() {
+                            self.vanilla_versions_download_list.clear();
+                            self.fabric_versions_download_list.clear();
+                            for i in &list[0] {
+                                let ii = i;
+                                self.vanilla_versions_download_list.push(ii.to_string());
+                            }
+                            for i in &list[1] {
+                                let ii = i;
+                                self.fabric_versions_download_list.push(ii.to_string());
+                            }
+                        }
                     }
-                    for i in &list[1] {
-                        let ii = i;
-                        self.fabric_versions_download_list.push(ii.to_string());
-                    }
+                    Err(err) => self.download_text = err,
                 }
 
                 Command::none()
@@ -686,7 +679,7 @@ impl Application for Siglauncher {
                 self.game_state_text = s;
                 self.launch();
                 Command::none()
-            },
+            }
         }
     }
 

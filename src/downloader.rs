@@ -132,7 +132,6 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
 
             let version_json = getjson(format!("{}/{}.json", version_folder, version_name));
 
-
             // asset index, we need this file to get assets
             let asset_index_download = match client
                 .get(vanilla_version_json["assetIndex"]["url"].as_str().unwrap())
@@ -491,21 +490,21 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
     }
 }
 
-pub async fn download_version_jar(url: String, path: String) -> String{
-    let jar_bytes = match reqwest::get(url).await{
-        Ok(ok) => match ok.bytes().await{
+pub async fn download_version_jar(url: String, path: String) -> String {
+    let jar_bytes = match reqwest::get(url).await {
+        Ok(ok) => match ok.bytes().await {
             Ok(ok) => ok,
             Err(e) => return format!("Failed to download: {e}"),
         },
         Err(e) => return format!("Failed to download: {e}"),
     };
 
-    let mut file = match File::create(&path){
+    let mut file = match File::create(&path) {
         Ok(ok) => ok,
         Err(e) => return format!("Failed to create file: {e}"),
     };
 
-    match file.write_all(&jar_bytes){
+    match file.write_all(&jar_bytes) {
         Ok(ok) => ok,
         Err(e) => return format!("Failed to write to file: {e}"),
     }
@@ -650,19 +649,27 @@ pub async fn downloadversionjson(
 
 pub async fn get_downloadable_version_list(
     showallversions: bool,
-) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Vec<String>>, String> {
     let client = reqwest::Client::new();
     // vanilla
-    let vanillaversionlistjson = client
+    let vanillaversionlistjson = match client
         .get("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
         .send()
-        .await?
-        .text()
-        .await?;
+        .await
+    {
+        Ok(ok) => match ok.text().await {
+            Ok(ok) => ok,
+            Err(e) => return Err(format!("failed to get download list: {}", e)),
+        },
+        Err(e) => return Err(format!("failed to get download list: {}", e)),
+    };
 
     let content = serde_json::from_str(&vanillaversionlistjson);
 
-    let p: Value = content?;
+    let p: Value = match content {
+        Ok(ok) => ok,
+        Err(e) => return Err(format!("failed to read list as json: {}", e)),
+    };
 
     let mut vanillaversionlist: Vec<String> = vec![];
     if let Some(versions) = p["versions"].as_array() {
@@ -679,16 +686,24 @@ pub async fn get_downloadable_version_list(
         }
     }
     // fabric
-    let fabricversionlistjson = client
+    let fabricversionlistjson = match client
         .get("https://meta.fabricmc.net/v2/versions/game")
         .send()
-        .await?
-        .text()
-        .await?;
+        .await
+    {
+        Ok(ok) => match ok.text().await {
+            Ok(ok) => ok,
+            Err(e) => return Err(format!("failed to get fabric download list: {}", e)),
+        },
+        Err(e) => return Err(format!("failed to get fabric download list: {}", e)),
+    };
 
     let content = serde_json::from_str(&fabricversionlistjson);
 
-    let p: Value = content?;
+    let p: Value = match content {
+        Ok(ok) => ok,
+        Err(e) => return Err(format!("failed to read fabric list as json: {}", e)),
+    };
 
     let mut fabricversionlist: Vec<String> = vec![];
     if let Some(versions) = p.as_array() {
