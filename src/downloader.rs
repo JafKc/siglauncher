@@ -24,6 +24,7 @@ pub enum State {
         file_to_write: File,
     },
     ExtractingJava(String),
+    DownloadingMissingFiles(DownloadList),
     Idle,
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +42,9 @@ pub enum Progress {
     JavaDownloadProgressed(u8, u8),
     JavaDownloadFinished,
     JavaExtracted,
+
+    MissingFilesDownloadProgressed(u16),
+    MissingFilesDownloadFinished,
 
     Errored(String),
 }
@@ -69,14 +73,24 @@ pub fn start_java<I: 'static + Hash + Copy + Send + Sync>(
         download(id, state)
     })
 }
-pub struct DownloadList {
-    download_list: Vec<Download>,
-    client: Client,
+
+pub fn start_missing_files<I: 'static + Hash + Copy + Send + Sync>(
+    id: I,
+    files: DownloadList,
+) -> iced::Subscription<(I, Progress)> {
+    subscription::unfold(id, State::DownloadingMissingFiles(files), move |state| {
+        download(id, state)
+    })
 }
 #[derive(Clone)]
+pub struct DownloadList {
+    pub download_list: Vec<Download>,
+    pub client: Client,
+}
+#[derive(Clone, Debug, PartialEq)]
 pub struct Download {
-    path: String,
-    url: String,
+    pub path: String,
+    pub url: String,
 }
 
 async fn download<I: 'static + Hash + Copy + Send + Sync>(
@@ -97,7 +111,7 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
 
             let version_name = match version_type {
                 VersionType::Vanilla => version.clone(),
-                VersionType::Fabric => format!("fabric {}", &version),
+                VersionType::Fabric => format!("{}-fabric", &version),
             };
 
             let version_folder = format!("{}/versions/{}", &mc_dir, version_name);
@@ -130,7 +144,7 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
                 }
             };
 
-            let version_json = getjson(format!("{}/{}.json", version_folder, version_name));
+            let version_json = super::getjson(format!("{}/{}.json", version_folder, version_name));
 
             // asset index, we need this file to get assets
             let asset_index_download = match client
@@ -161,7 +175,7 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
                 Err(e) => return ((id, Progress::Errored(e.to_string())), State::Idle),
             }
 
-            let asset_index_json = getjson(asset_index_path);
+            let asset_index_json = super::getjson(asset_index_path);
 
             // variable to store download list
             let mut download_list = vec![];
@@ -176,72 +190,11 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
             });
 
             // push assets
-            // for older version (pre 1.6)
-            let save_to_resources = !asset_index_json["map_to_resources"].is_null();
-
-            if let Some(assets) = asset_index_json["objects"].as_object() {
-                let assets_directory = format!("{}/assets/objects/", &mc_dir);
-                let old_assets_directory = format!("{}/resources", &mc_dir);
-
-                for (key, value) in assets.iter() {
-                    if let Some(hash) = value["hash"].as_str() {
-                        match save_to_resources {
-                            true => {
-                                match fs::create_dir_all(format!("{}", old_assets_directory)) {
-                                    Ok(ok) => ok,
-                                    Err(e) => {
-                                        return (
-                                            (id, Progress::Errored(e.to_string())),
-                                            State::Idle,
-                                        )
-                                    }
-                                };
-
-                                let asset_path = format!("{}/{}", old_assets_directory, key);
-                                let asset_url = format!(
-                                    "https://resources.download.minecraft.net/{}/{}",
-                                    &hash[0..2],
-                                    hash
-                                );
-
-                                download_list.push(Download {
-                                    path: asset_path,
-                                    url: asset_url,
-                                });
-                            }
-
-                            false => {
-                                match fs::create_dir_all(format!(
-                                    "{}/{}",
-                                    assets_directory,
-                                    &hash[0..2]
-                                )) {
-                                    Ok(ok) => ok,
-                                    Err(e) => {
-                                        return (
-                                            (id, Progress::Errored(e.to_string())),
-                                            State::Idle,
-                                        )
-                                    }
-                                };
-                                let asset_path =
-                                    format!("{}/{}/{}", &assets_directory, &hash[0..2], &hash);
-
-                                let asset_url = format!(
-                                    "https://resources.download.minecraft.net/{}/{}",
-                                    &hash[0..2],
-                                    hash
-                                );
-
-                                download_list.push(Download {
-                                    path: asset_path,
-                                    url: asset_url,
-                                });
-                            }
-                        }
-                    }
-                }
+            match get_assets(&mc_dir, asset_index_json) {
+                Ok(ok) => download_list.extend_from_slice(&ok),
+                Err(e) => return ((id, Progress::Errored(e.to_string())), State::Idle),
             }
+            // for older version (pre 1.6)
 
             // get library download list
             let libresult = &get_libraries(
@@ -283,7 +236,7 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
                 ),
                 State::Downloading(DownloadList {
                     download_list: filtered_download_list,
-                    client: client,
+                    client,
                 }),
             )
         }
@@ -411,12 +364,12 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
                             total: size,
                             download: d,
                             folder_to_store: folder_to_store_download,
-                            file_to_write: file_to_write,
+                            file_to_write,
                         },
                     )
                 }
 
-                Err(e) => return ((id, Progress::Errored(e.to_string())), State::Idle),
+                Err(e) => ((id, Progress::Errored(e.to_string())), State::Idle),
             }
         }
         State::DownloadingJava {
@@ -441,11 +394,11 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
                         Progress::JavaDownloadProgressed(mb_downloaded, percentage),
                     ),
                     State::DownloadingJava {
-                        downloaded: downloaded,
-                        total: total,
+                        downloaded,
+                        total,
                         download,
-                        folder_to_store: folder_to_store,
-                        file_to_write: file_to_write,
+                        folder_to_store,
+                        file_to_write,
                     },
                 )
             }
@@ -485,7 +438,78 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
             }
             fs::remove_file(format!("{}/compressed.zip", folder)).unwrap();
 
-            return ((id, Progress::JavaExtracted), State::Idle);
+            ((id, Progress::JavaExtracted), State::Idle)
+        }
+        State::DownloadingMissingFiles(download_list) => {
+            if download_list.download_list.is_empty() {
+                println!("finished");
+                return ((id, Progress::MissingFilesDownloadFinished), State::Idle);
+            }
+
+            let mut list = download_list.download_list.clone();
+
+            let current_file_to_download = list.remove(0);
+            println!("Downloading {}", current_file_to_download.path);
+
+            let current_download = match download_list
+                .client
+                .get(current_file_to_download.url)
+                .send()
+                .await
+            {
+                Ok(ok) => ok.bytes().await.unwrap(),
+                Err(e) => return ((id, Progress::Errored(e.to_string())), State::Idle),
+            };
+
+            let mut file = match File::create(&current_file_to_download.path) {
+                Ok(file) => file,
+                Err(e) => return ((id, Progress::Errored(e.to_string())), State::Idle),
+            };
+
+            match file.write_all(&current_download) {
+                Ok(ok) => ok,
+                Err(e) => return ((id, Progress::Errored(e.to_string())), State::Idle),
+            }
+
+            if current_file_to_download.path.contains("natives.jar") {
+                let nativesfile = File::open(&current_file_to_download.path).unwrap();
+                let reader = BufReader::new(nativesfile);
+                let mut archive = ZipArchive::new(reader).unwrap();
+
+                let folder_to_store_natives =
+                    &current_file_to_download.path.replace("/natives.jar", "");
+
+                for i in 0..archive.len() {
+                    let mut file = archive.by_index(i).unwrap();
+                    let outpath = format!(
+                        "{}/{}",
+                        &folder_to_store_natives,
+                        file.mangled_name().to_string_lossy()
+                    );
+                    if file.is_dir() {
+                        println!("Creating directory: {:?}", outpath);
+                        std::fs::create_dir_all(&outpath).unwrap();
+                    } else {
+                        println!("Extracting file: {:?}", outpath);
+                        let mut outfile = File::create(&outpath).unwrap();
+                        std::io::copy(&mut file, &mut outfile).unwrap();
+                    }
+                }
+                fs::remove_file(&current_file_to_download.path).unwrap();
+            };
+
+            println!("starting next download.");
+
+            (
+                (
+                    id,
+                    Progress::MissingFilesDownloadProgressed(list.len() as u16),
+                ),
+                State::DownloadingMissingFiles(DownloadList {
+                    download_list: list,
+                    client: download_list.client,
+                }),
+            )
         }
     }
 }
@@ -562,7 +586,7 @@ pub async fn downloadversionjson(
             jfile.read_to_string(&mut fcontent).unwrap();
             let content = serde_json::from_str(&fcontent);
             let json: Value = content.unwrap();
-            return Ok(json);
+            Ok(json)
         }
         VersionType::Fabric => {
             // fabric versions also need the vanilla json, so we are downloading it too.
@@ -631,7 +655,7 @@ pub async fn downloadversionjson(
                 .bytes()
                 .await?;
 
-            let jfilelocation = format!("{}/fabric {}.json", foldertosave, version);
+            let jfilelocation = format!("{}/{}-fabric.json", foldertosave, version);
             fs::create_dir_all(foldertosave).unwrap();
             let mut jfile = File::create(&jfilelocation).unwrap();
 
@@ -722,16 +746,7 @@ pub async fn get_downloadable_version_list(
     Ok(vec![vanillaversionlist, fabricversionlist])
 }
 
-fn getjson(jpathstring: String) -> Value {
-    let jsonpath = Path::new(&jpathstring);
-
-    let mut file = File::open(jsonpath).unwrap();
-    let mut fcontent = String::new();
-    file.read_to_string(&mut fcontent).unwrap();
-    serde_json::from_str(&fcontent).unwrap()
-}
-
-fn get_libraries(
+pub fn get_libraries(
     mc_dir: &String,
     libraries: &Vec<Value>,
     foldertosave: &String,
@@ -747,6 +762,7 @@ fn get_libraries(
     }
 
     let mut library_download_list = vec![];
+    let mut got_natives = false;
 
     for library in libraries {
         if library["rules"][0]["os"]["name"] == os || library["rules"][0]["os"]["name"].is_null() {
@@ -892,7 +908,8 @@ fn get_libraries(
             }
         }
 
-        if !library["downloads"]["classifiers"][format!("natives-{}", os)].is_null() {
+        if !got_natives && !library["downloads"]["classifiers"][format!("natives-{}", os)].is_null()
+        {
             let url = library["downloads"]["classifiers"][format!("natives-{}", os)]["url"]
                 .as_str()
                 .unwrap()
@@ -901,10 +918,8 @@ fn get_libraries(
             fs::create_dir_all(format!("{}/natives", foldertosave)).unwrap();
             let path = format!("{}/natives/natives.jar", foldertosave);
 
-            library_download_list.push(Download {
-                path: path,
-                url: url,
-            })
+            library_download_list.push(Download { path, url });
+            got_natives = true;
         }
     }
     Ok(library_download_list)
@@ -917,4 +932,60 @@ fn get_library_url(unmodifiedurl: &str, lib: String) -> String {
         "" => format!("https://libraries.minecraft.net/{}", lib),
         _ => unmodifiedurl.to_string(),
     }
+}
+
+pub fn get_assets(mc_dir: &String, asset_index_json: Value) -> Result<Vec<Download>, String> {
+    let save_to_resources = !asset_index_json["map_to_resources"].is_null();
+    let mut download_list = Vec::new();
+
+    if let Some(assets) = asset_index_json["objects"].as_object() {
+        let assets_directory = format!("{}/assets/objects/", &mc_dir);
+        let old_assets_directory = format!("{}/resources", &mc_dir);
+
+        for (key, value) in assets.iter() {
+            if let Some(hash) = value["hash"].as_str() {
+                match save_to_resources {
+                    true => {
+                        match fs::create_dir_all(&old_assets_directory) {
+                            Ok(ok) => ok,
+                            Err(e) => return Err(e.to_string()),
+                        };
+
+                        let asset_path = format!("{}/{}", old_assets_directory, key);
+                        let asset_url = format!(
+                            "https://resources.download.minecraft.net/{}/{}",
+                            &hash[0..2],
+                            hash
+                        );
+
+                        download_list.push(Download {
+                            path: asset_path,
+                            url: asset_url,
+                        });
+                    }
+
+                    false => {
+                        match fs::create_dir_all(format!("{}/{}", assets_directory, &hash[0..2])) {
+                            Ok(ok) => ok,
+                            Err(e) => return Err(e.to_string()),
+                        };
+                        let asset_path = format!("{}/{}/{}", &assets_directory, &hash[0..2], &hash);
+
+                        let asset_url = format!(
+                            "https://resources.download.minecraft.net/{}/{}",
+                            &hash[0..2],
+                            hash
+                        );
+
+                        download_list.push(Download {
+                            path: asset_path,
+                            url: asset_url,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(download_list)
 }

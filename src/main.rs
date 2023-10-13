@@ -73,24 +73,25 @@ struct Siglauncher {
 
     game_profile_to_add: String,
 
-    downloading_version: bool,
-    downloading_java: bool,
+    restrict_launch: bool,
     java_download_size: u8,
 }
 
 #[derive(PartialEq, Debug, Clone, Default)]
 enum Screen {
     #[default]
-    MainScreen,
-    OptionsScreen,
-    InstallationScreen,
-    JavaScreen,
-    GameProfileScreen,
-    LogsScreen,
-    WrapperCommandsScreen,
+    Main,
+    Options,
+    Installation,
+    Java,
+    GameProfile,
+    Logs,
+    WrapperCommands,
 }
 #[derive(Debug, Clone)]
 enum Message {
+    LoadVersionList(Vec<String>),
+
     Launch,
     ManageGameInfo((usize, launcher::Progress)),
 
@@ -240,7 +241,7 @@ impl Application for Siglauncher {
 
         (
             Siglauncher {
-                screen: Screen::MainScreen,
+                screen: Screen::Main,
                 username: p["username"].as_str().unwrap().to_owned(),
                 current_version: p["current_version"].as_str().unwrap().to_owned(),
                 game_ram: p["game_ram"].as_f64().unwrap(),
@@ -249,24 +250,23 @@ impl Application for Siglauncher {
                 current_game_profile: p["current_game_profile"].as_str().unwrap().to_owned(),
                 game_wrapper_commands: p["game_wrapper_commands"].as_str().unwrap().to_owned(),
                 show_all_versions_in_download_list: p["show_all_versions"].as_bool().unwrap(),
-                all_versions: launcher::getinstalledversions(),
                 java_name_list: jvmnames,
                 game_profile_list: new_game_profile_list,
                 needs_to_update_download_list: true,
                 ..Default::default()
             },
-            Command::none(),
+            Command::perform(launcher::getinstalledversions(), Message::LoadVersionList),
         )
     }
 
     fn title(&self) -> String {
-        String::from("Siglauncher 0.5")
+        String::from("Siglauncher 0.5.2")
     }
 
     fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
         match message {
             Message::Launch => {
-                if !self.downloading_java {
+                if !self.restrict_launch {
                     self.launch();
                 }
                 Command::none()
@@ -295,7 +295,15 @@ impl Application for Siglauncher {
                                     self.downloaders[index].start_java(downloader::Java::J17)
                                 }
                                 launcher::Missing::VersionFiles(vec) => {
+                                    self.game_state_text =
+                                        String::from("Found missing files. Starting download.");
                                     self.launcher.state = LauncherState::Idle;
+                                    self.downloaders.push(Downloader {
+                                        state: DownloaderState::Idle,
+                                        id: self.downloaders.len(),
+                                    });
+                                    let index = self.downloaders.len() - 1;
+                                    self.downloaders[index].start_missing_files(vec)
                                 }
                                 launcher::Missing::VanillaVersion(url, path) => {
                                     self.launcher.state = LauncherState::Idle;
@@ -361,7 +369,7 @@ impl Application for Siglauncher {
                 Command::none()
             }
             Message::ChangeScreen(new_screen) => {
-                if self.screen == Screen::OptionsScreen {
+                if self.screen == Screen::Options {
                     updatesettingsfile(
                         self.game_ram,
                         self.current_java_name.clone(),
@@ -374,21 +382,23 @@ impl Application for Siglauncher {
 
                 self.screen = new_screen.clone();
 
-                if new_screen == Screen::MainScreen {
-                    self.all_versions = launcher::getinstalledversions();
-                } else if new_screen == Screen::InstallationScreen {
-                    if !self.vanilla_versions_download_list.is_empty()
+                if new_screen == Screen::Main {
+                    return Command::perform(
+                        launcher::getinstalledversions(),
+                        Message::LoadVersionList,
+                    );
+                } else if new_screen == Screen::Installation
+                    && (!self.vanilla_versions_download_list.is_empty()
                         || !self.fabric_versions_download_list.is_empty()
-                        || self.needs_to_update_download_list
-                    {
-                        let show_all_versions = self.show_all_versions_in_download_list;
-                        return Command::perform(
-                            async move {
-                                downloader::get_downloadable_version_list(show_all_versions).await
-                            },
-                            Message::GotDownloadList,
-                        );
-                    }
+                        || self.needs_to_update_download_list)
+                {
+                    let show_all_versions = self.show_all_versions_in_download_list;
+                    return Command::perform(
+                        async move {
+                            downloader::get_downloadable_version_list(show_all_versions).await
+                        },
+                        Message::GotDownloadList,
+                    );
                 }
 
                 Command::none()
@@ -549,7 +559,7 @@ impl Application for Siglauncher {
                         .open("siglauncher_settings.json")
                         .unwrap();
                     file.write_all(serialized.as_bytes()).unwrap();
-                    self.screen = Screen::OptionsScreen;
+                    self.screen = Screen::Options;
                 }
                 Command::none()
             }
@@ -587,7 +597,7 @@ impl Application for Siglauncher {
 
                     self.game_profile_list = new_game_profile_list;
 
-                    self.screen = Screen::OptionsScreen;
+                    self.screen = Screen::Options;
                 }
                 Command::none()
             }
@@ -600,7 +610,7 @@ impl Application for Siglauncher {
                 match progress {
                     downloader::Progress::GotDownloadList(file_number) => {
                         self.download_text =
-                            format!("Downloaded 0 from {} files. (0%)", file_number.to_string());
+                            format!("Downloaded 0 from {} files. (0%)", file_number);
                         self.files_download_number = file_number;
                     }
                     downloader::Progress::Downloaded(remaining_files_number) => {
@@ -612,9 +622,7 @@ impl Application for Siglauncher {
 
                         self.download_text = format!(
                             "Downloaded {} from {} files. ({}%)",
-                            downloaded_files.to_string(),
-                            self.files_download_number,
-                            percentage
+                            downloaded_files, self.files_download_number, percentage
                         );
                     }
                     downloader::Progress::Finished => {
@@ -636,7 +644,7 @@ impl Application for Siglauncher {
                         }
                     }
                     downloader::Progress::StartedJavaDownload(size) => {
-                        self.downloading_java = true;
+                        self.restrict_launch = true;
                         self.game_state_text = format!("Downloading java. 0 / {size} MiB (0%)");
                         self.java_download_size = size;
                     }
@@ -650,16 +658,32 @@ impl Application for Siglauncher {
                         self.game_state_text = String::from("Extracting Java")
                     }
                     downloader::Progress::JavaExtracted => {
-                        self.launch();
-
                         self.game_state_text = String::from("Java was installed successfully.");
-                        self.downloading_java = false;
+                        self.restrict_launch = false;
                         for (index, downloader) in self.downloaders.iter().enumerate() {
                             if downloader.id == id {
                                 self.downloaders.remove(index);
                                 break;
                             }
                         }
+
+                        self.launch();
+                    }
+                    downloader::Progress::MissingFilesDownloadProgressed(missing_files) => {
+                        self.restrict_launch = true;
+                        self.game_state_text =
+                            format!("Downloading missing files. {} left", missing_files);
+                    }
+                    downloader::Progress::MissingFilesDownloadFinished => {
+                        self.restrict_launch = false;
+                        for (index, downloader) in self.downloaders.iter().enumerate() {
+                            if downloader.id == id {
+                                self.downloaders.remove(index);
+                                break;
+                            }
+                        }
+
+                        self.launch();
                     }
                 }
                 Command::none()
@@ -680,6 +704,10 @@ impl Application for Siglauncher {
                 self.launch();
                 Command::none()
             }
+            Message::LoadVersionList(ver_list) => {
+                self.all_versions = ver_list;
+                Command::none()
+            }
         }
     }
 
@@ -690,7 +718,7 @@ impl Application for Siglauncher {
                 button(svg(svg::Handle::from_memory(
                     include_bytes!("icons/home.svg").as_slice()
                 )))
-                .on_press(Message::ChangeScreen(Screen::MainScreen))
+                .on_press(Message::ChangeScreen(Screen::Main))
                 .style(theme::Button::Transparent)
                 .width(Length::Fixed(40.))
                 .height(Length::Fixed(40.)),
@@ -698,7 +726,7 @@ impl Application for Siglauncher {
                 button(svg(svg::Handle::from_memory(
                     include_bytes!("icons/options.svg").as_slice()
                 )))
-                .on_press(Message::ChangeScreen(Screen::OptionsScreen))
+                .on_press(Message::ChangeScreen(Screen::Options))
                 .style(theme::Button::Transparent)
                 .width(Length::Fixed(40.))
                 .height(Length::Fixed(40.)),
@@ -706,7 +734,7 @@ impl Application for Siglauncher {
                 button(svg(svg::Handle::from_memory(
                     include_bytes!("icons/download.svg").as_slice()
                 )))
-                .on_press(Message::ChangeScreen(Screen::InstallationScreen))
+                .on_press(Message::ChangeScreen(Screen::Installation))
                 .style(theme::Button::Transparent)
                 .width(Length::Fixed(40.))
                 .height(Length::Fixed(40.)),
@@ -736,7 +764,7 @@ impl Application for Siglauncher {
         .height(Length::Fill);
 
         let content = match self.screen {
-            Screen::MainScreen => column![
+            Screen::Main => column![
                 //mainscreen
                 //title
                 column![
@@ -790,7 +818,7 @@ impl Application for Siglauncher {
                             )
                             .width(80)
                             .height(32)
-                            .on_press(Message::ChangeScreen(Screen::LogsScreen)),
+                            .on_press(Message::ChangeScreen(Screen::Logs)),
                         ]
                         .spacing(10)
                         .align_items(Alignment::Center)
@@ -818,7 +846,7 @@ impl Application for Siglauncher {
             .spacing(25)
             .max_width(800),
 
-            Screen::OptionsScreen => column![
+            Screen::Options => column![
                 //optionsscreen
                 //title
                 text("Options").size(50),
@@ -841,7 +869,7 @@ impl Application for Siglauncher {
                                         .horizontal_alignment(alignment::Horizontal::Center)
                                 )
                                 .height(32)
-                                .on_press(Message::ChangeScreen(Screen::JavaScreen))
+                                .on_press(Message::ChangeScreen(Screen::Java))
                             ]
                             .spacing(10)
                             .max_width(800)
@@ -862,7 +890,7 @@ impl Application for Siglauncher {
                                         .horizontal_alignment(alignment::Horizontal::Center)
                                 )
                                 .height(32)
-                                .on_press(Message::ChangeScreen(Screen::GameProfileScreen))
+                                .on_press(Message::ChangeScreen(Screen::GameProfile))
                             ]
                             .spacing(10)
                             .max_width(800)
@@ -895,7 +923,7 @@ impl Application for Siglauncher {
                             ]
                             .spacing(10),
                             button("Add wrapper commands")
-                                .on_press(Message::ChangeScreen(Screen::WrapperCommandsScreen))
+                                .on_press(Message::ChangeScreen(Screen::WrapperCommands))
                         ]
                         .spacing(50)
                     )
@@ -907,7 +935,7 @@ impl Application for Siglauncher {
             .spacing(15)
             .max_width(800),
 
-            Screen::InstallationScreen => {
+            Screen::Installation => {
                 column![
                 //installerscreen
                 //title
@@ -970,7 +998,7 @@ impl Application for Siglauncher {
             .max_width(800)
             }
 
-            Screen::JavaScreen => column![
+            Screen::Java => column![
                 text("Manage JVMs")
                     .size(50)
                     .horizontal_alignment(alignment::Horizontal::Center),
@@ -1008,7 +1036,7 @@ impl Application for Siglauncher {
             ]
             .spacing(15)
             .max_width(800),
-            Screen::GameProfileScreen => column![
+            Screen::GameProfile => column![
                 text("Manage game profiles")
                     .size(50)
                     .horizontal_alignment(alignment::Horizontal::Center),
@@ -1037,14 +1065,14 @@ impl Application for Siglauncher {
             .spacing(15)
             .max_width(800),
 
-            Screen::LogsScreen => column![
+            Screen::Logs => column![
                 text("Game logs").size(50),
                 container(scrollable(text(self.logs.join("\n")).size(10)))
                     .style(theme::Container::BlackContainer)
                     .padding(10)
             ]
             .spacing(15),
-            Screen::WrapperCommandsScreen => column![
+            Screen::WrapperCommands => column![
                 text("Wrapper commands").size(50),
                 text("advanced setting, only edit if you know what you are doing.")
                     .size(12)
@@ -1223,6 +1251,7 @@ enum DownloaderState {
     Idle,
     Downloading(String, downloader::VersionType),
     JavaDownloading(downloader::Java),
+    DownloadingMissingFiles(downloader::DownloadList),
 }
 
 impl Default for Downloader {
@@ -1237,7 +1266,7 @@ impl Downloader {
     pub fn new(id: usize) -> Self {
         Downloader {
             state: DownloaderState::Idle,
-            id: id,
+            id,
         }
     }
 
@@ -1246,6 +1275,13 @@ impl Downloader {
     }
     pub fn start_java(&mut self, java: downloader::Java) {
         self.state = DownloaderState::JavaDownloading(java)
+    }
+    pub fn start_missing_files(&mut self, files: Vec<downloader::Download>) {
+        let download_list = downloader::DownloadList {
+            download_list: files,
+            client: reqwest::Client::new(),
+        };
+        self.state = DownloaderState::DownloadingMissingFiles(download_list)
     }
     pub fn subscription(&self) -> Subscription<Message> {
         match &self.state {
@@ -1256,6 +1292,10 @@ impl Downloader {
             }
             DownloaderState::JavaDownloading(java) => {
                 downloader::start_java(self.id, java.clone()).map(Message::ManageDownload)
+            }
+            DownloaderState::DownloadingMissingFiles(download_list) => {
+                downloader::start_missing_files(self.id, download_list.clone())
+                    .map(Message::ManageDownload)
             }
         }
     }
@@ -1274,4 +1314,13 @@ struct Java {
     name: String,
     path: String,
     flags: String,
+}
+
+fn getjson(jpathstring: String) -> Value {
+    let jsonpath = Path::new(&jpathstring);
+
+    let mut file = File::open(jsonpath).unwrap();
+    let mut fcontent = String::new();
+    file.read_to_string(&mut fcontent).unwrap();
+    serde_json::from_str(&fcontent).unwrap()
 }
