@@ -4,7 +4,7 @@ use std::{
     env,
     fs::{self, File},
     hash::Hash,
-    io::{BufRead, BufReader, Read},
+    io::{BufRead, BufReader, Read, Write},
     path::Path,
     process::{Command, Stdio},
     sync::mpsc::{self, Receiver},
@@ -30,7 +30,7 @@ pub enum Progress {
 pub enum Missing {
     Java8,
     Java17,
-    VersionFiles(Vec<String>),
+    VersionFiles(Vec<super::downloader::Download>),
     VanillaVersion(String, String),
     VanillaJson(String, String),
 }
@@ -41,7 +41,7 @@ pub fn start<I: 'static + Hash + Copy + Send + Sync>(
 ) -> iced::Subscription<(I, Progress)> {
     subscription::unfold(
         id,
-        State::Checking(game_settings.to_owned().clone().cloned()),
+        State::Checking(game_settings.to_owned().cloned()),
         move |state| launcher(id, state),
     )
 }
@@ -61,6 +61,7 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
         State::Checking(game_settings) => {
             let game_settings = game_settings.unwrap();
             let minecraft_dir = get_minecraft_dir();
+            let version_dir = format!("{}/versions/{}", minecraft_dir, game_settings.game_version);
 
             // game json file
             let jsonpathstring = format!(
@@ -70,9 +71,14 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
             let jsonpath = Path::new(&jsonpathstring);
             let mut json_file = match File::open(jsonpath) {
                 Ok(file) => file,
-                Err(err) => {
-                    println!("Failed to open {:?}: {:?}", jsonpath, err);
-                    panic!("no!!!")
+                Err(e) => {
+                    return (
+                        (
+                            id,
+                            Progress::Errored(format!("Error {e}. Try reinstalling the version")),
+                        ),
+                        State::Idle,
+                    )
                 }
             };
             let mut json_file_content = String::new();
@@ -154,6 +160,118 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                 }
             }
 
+            // check for missing libraries, natives, assets and client jar
+
+            let mut missing_libraries_list = Vec::new();
+            let version_jar_path = format!(
+                "{}/versions/{}/{}.jar",
+                minecraft_dir, game_settings.game_version, game_settings.game_version
+            );
+
+            if !Path::new(&version_jar_path).exists() {
+                missing_libraries_list.push(super::downloader::Download {
+                    path: version_jar_path,
+                    url: p["downloads"]["client"]["url"]
+                        .as_str()
+                        .unwrap()
+                        .to_string(),
+                })
+            }
+
+            let is_natives_folder_empty = match fs::read_dir(format!("{}/natives", version_dir)) {
+                Ok(ok) => ok.count() == 0,
+                Err(e) => {
+                    println!("Natives folder not found: {e}\n ignoring");
+
+                    false
+                }
+            };
+
+            match super::downloader::get_libraries(
+                &minecraft_dir,
+                p["libraries"].as_array().unwrap(),
+                &version_dir,
+            ) {
+                Ok(ok) => {
+                    for i in ok {
+                        if !Path::new(&i.path).exists() {
+                            if i.path.contains("natives.jar") {
+                                println!("AH VEADO");
+                                if is_natives_folder_empty {
+                                    missing_libraries_list.push(i);
+                                    continue;
+                                } else {
+                                    continue;
+                                }
+                            }
+                            missing_libraries_list.push(i);
+                        }
+                    }
+                }
+                Err(e) => println!("Failed to get libraries, ignoring. -> {e}"),
+            }
+
+            //check for asset index and downloads it if doesn't exist
+            let asset_index_path = format!(
+                "{}/assets/indexes/{}.json",
+                minecraft_dir,
+                p["assets"].as_str().unwrap()
+            );
+            if !Path::new(&asset_index_path).exists() {
+                match reqwest::get(p["assetIndex"]["url"].as_str().unwrap()).await {
+                    Ok(ok) => {
+                        let bytes = ok.bytes().await.unwrap();
+
+                        match fs::create_dir_all(format!("{}/assets/indexes", minecraft_dir)) {
+                            Ok(ok) => ok,
+                            Err(e) => {
+                                println!("Failed to create asset index directory, ignoring. -> {e}")
+                            }
+                        }
+                        match File::create(&asset_index_path) {
+                            Ok(mut ok) => match ok.write_all(&bytes) {
+                                Ok(ok) => ok,
+                                Err(e) => {
+                                    println!("Failed to write to asset index, ignoring. -> {e}")
+                                }
+                            },
+                            Err(e) => println!("Failed to create asset index, ignoring. -> {e}"),
+                        }
+                    }
+                    Err(e) => println!("Failed to download asset index, ignoring. -> {e}"),
+                };
+            }
+
+            if Path::new(&format!(
+                "{}/assets/indexes/{}.json",
+                minecraft_dir,
+                p["assets"].as_str().unwrap()
+            ))
+            .exists()
+            {
+                let asset_p = super::getjson(asset_index_path);
+
+                match super::downloader::get_assets(&minecraft_dir, asset_p) {
+                    Ok(ok) => {
+                        for i in ok {
+                            if !Path::new(&i.path).exists() {
+                                missing_libraries_list.push(i)
+                            }
+                        }
+                    }
+                    Err(e) => println!("Failed to get assets, ignoring. -> {e}"),
+                }
+            }
+
+            if !missing_libraries_list.is_empty() {
+                return (
+                    (
+                        id,
+                        Progress::Checked(Some(Missing::VersionFiles(missing_libraries_list))),
+                    ),
+                    State::Idle,
+                );
+            }
             // check for java
             if game_settings.autojava {
                 if p["javaVersion"]["majorVersion"].as_i64().unwrap_or(0) > 8
@@ -190,11 +308,6 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
             };
 
             let assets_dir = format!("{}/assets", &minecraft_directory);
-
-            let version_path = format!(
-                "{}/versions/{}/{}.jar",
-                &minecraft_directory, game_settings.game_version, game_settings.game_version
-            );
 
             // json file {
             let jsonpathstring = format!(
@@ -272,10 +385,8 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                 for i in arguments {
                     if i.is_string() {
                         str_arguments.push(i.as_str().unwrap_or("").to_owned())
-                    } else {
-                        if i["value"].is_string() {
-                            str_arguments.push(i["value"].as_str().unwrap().to_owned())
-                        }
+                    } else if i["value"].is_string() {
+                        str_arguments.push(i["value"].as_str().unwrap().to_owned())
                     }
                 }
 
@@ -319,7 +430,7 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
             println!("Launching game process");
             if command_exists(game_command.get_program().to_str().unwrap()) {
                 let game_process_receiver = run_and_log_game(game_command);
-                return if let Ok(game_pr_rec) = game_process_receiver.await {
+                if let Ok(game_pr_rec) = game_process_receiver.await {
                     ((id, Progress::Started), State::GettingLogs(game_pr_rec))
                 } else {
                     (
@@ -329,7 +440,7 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                         ),
                         State::Idle,
                     )
-                };
+                }
             } else {
                 (
                     (
@@ -342,7 +453,7 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
         }
 
         State::GettingLogs(receiver) => {
-            return if let Ok(log_line) = receiver.0.recv() {
+            if let Ok(log_line) = receiver.0.recv() {
                 (
                     (id, Progress::GotLog(log_line)),
                     State::GettingLogs(receiver),
@@ -412,7 +523,7 @@ pub fn get_minecraft_dir() -> String {
     }
 }
 
-pub fn getinstalledversions() -> Vec<String> {
+pub async fn getinstalledversions() -> Vec<String> {
     let versions_dir = format!("{}/versions", get_minecraft_dir());
 
     if !Path::new(&versions_dir).exists() {
@@ -420,7 +531,7 @@ pub fn getinstalledversions() -> Vec<String> {
     }
     let entries = fs::read_dir(versions_dir).unwrap();
 
-    entries
+    let mut versions = entries
         .filter_map(|entry| {
             let path = entry.unwrap().path();
             if path.is_dir() {
@@ -429,7 +540,73 @@ pub fn getinstalledversions() -> Vec<String> {
                 None
             }
         })
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+    versions.sort_unstable_by(|a, b| get_version_order(b, a));
+    versions
+}
+
+fn get_version_order(a: &str, b: &str) -> std::cmp::Ordering {
+    let split_a: Vec<&str> = a.split(|c| c == '.' || c == '-').collect();
+    let split_b: Vec<&str> = b.split(|c| c == '.' || c == '-').collect();
+
+    if let (Some(major_a), Some(major_b)) = (
+        split_a.first().and_then(|v| v.parse::<i32>().ok()),
+        split_b.first().and_then(|v| v.parse::<i32>().ok()),
+    ) {
+        if major_a != major_b {
+            return major_a.cmp(&major_b);
+        }
+    } else {
+        return match (
+            split_a.first().map(|v| v.parse::<i32>().is_ok()),
+            split_b.first().map(|v| v.parse::<i32>().is_ok()),
+        ) {
+            (Some(true), Some(false)) => std::cmp::Ordering::Greater,
+            (Some(false), Some(true)) => std::cmp::Ordering::Less,
+            _ => std::cmp::Ordering::Equal,
+        };
+    }
+
+    if let (Some(minor_a), Some(minor_b)) = (
+        split_a.get(1).and_then(|v| v.parse::<i32>().ok()),
+        split_b.get(1).and_then(|v| v.parse::<i32>().ok()),
+    ) {
+        if minor_a != minor_b {
+            return minor_a.cmp(&minor_b);
+        }
+    } else {
+        return match (
+            split_a.get(1).map(|v| v.parse::<i32>().is_ok()),
+            split_b.get(1).map(|v| v.parse::<i32>().is_ok()),
+        ) {
+            (Some(true), Some(false)) => std::cmp::Ordering::Greater,
+            (Some(false), Some(true)) => std::cmp::Ordering::Less,
+            _ => std::cmp::Ordering::Equal,
+        };
+    }
+
+    if let (Some(release_a), Some(release_b)) = (
+        split_a.get(2).and_then(|v| v.parse::<i32>().ok()),
+        split_b.get(2).and_then(|v| v.parse::<i32>().ok()),
+    ) {
+        if release_a != release_b {
+            return release_a.cmp(&release_b);
+        }
+    } else {
+        return match (
+            split_a.get(2).map(|v| v.parse::<i32>().is_ok()),
+            split_b.get(2).map(|v| v.parse::<i32>().is_ok()),
+        ) {
+            (Some(true), Some(false)) => std::cmp::Ordering::Greater,
+            (Some(false), Some(true)) => std::cmp::Ordering::Less,
+            _ => std::cmp::Ordering::Equal,
+        };
+    }
+
+    split_a
+        .get(3)
+        .unwrap_or(&"")
+        .cmp(split_b.get(3).unwrap_or(&""))
 }
 // } Utility functions
 
@@ -471,7 +648,7 @@ fn get_game_jvm_args(p: &Value, nativedir: &str) -> Vec<String> {
                 let value = i.as_str().unwrap();
 
                 if value.contains("${natives_directory}") {
-                    let value = value.replace("${natives_directory}", &nativedir);
+                    let value = value.replace("${natives_directory}", nativedir);
                     version_jvm_args.push(value);
                 } else if value == "${classpath}" || value == "-cp" {
                 } else {
@@ -501,7 +678,7 @@ fn automatic_java(mut p: Value, game_version: &String, ismodded: bool) -> (Strin
     };
 
     if ismodded {
-        let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(&game_version.as_str());
+        let vanillaversion = p["inheritsFrom"].as_str().unwrap_or(game_version.as_str());
         let vanillajsonpathstring = format!(
             "{}/versions/{}/{}.json",
             &mc_dir, game_version, vanillaversion
