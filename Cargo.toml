@@ -1,6 +1,6 @@
 [package]
 name = "siglauncher"
-version = "0.5.0"
+version = "0.5.2"
 edition = "2021"
 authors = ["JafKc"]
 repository = "https://github.com/JafKc/siglauncher"
