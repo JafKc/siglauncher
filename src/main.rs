@@ -266,7 +266,7 @@ impl Application for Siglauncher {
     fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
         match message {
             Message::Launch => {
-                if !self.restrict_launch {
+                if !self.restrict_launch && !self.current_version.is_empty() && !self.username.is_empty(){
                     self.launch();
                 }
                 Command::none()
