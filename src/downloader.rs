@@ -514,28 +514,6 @@ async fn download<I: 'static + Hash + Copy + Send + Sync>(
     }
 }
 
-pub async fn download_version_jar(url: String, path: String) -> String {
-    let jar_bytes = match reqwest::get(url).await {
-        Ok(ok) => match ok.bytes().await {
-            Ok(ok) => ok,
-            Err(e) => return format!("Failed to download: {e}"),
-        },
-        Err(e) => return format!("Failed to download: {e}"),
-    };
-
-    let mut file = match File::create(&path) {
-        Ok(ok) => ok,
-        Err(e) => return format!("Failed to create file: {e}"),
-    };
-
-    match file.write_all(&jar_bytes) {
-        Ok(ok) => ok,
-        Err(e) => return format!("Failed to write to file: {e}"),
-    }
-
-    String::from("Downloaded jar successfully")
-}
-
 // Json file
 pub async fn downloadversionjson(
     version_type: &VersionType,

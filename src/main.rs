@@ -110,7 +110,6 @@ enum Message {
     InstallVersion(downloader::VersionType),
     ManageDownload((usize, downloader::Progress)),
     VanillaJson(Value),
-    VanillaJar(String),
 
     OpenGameFolder,
     OpenGameProfileFolder,
@@ -131,7 +130,7 @@ enum Message {
 impl Siglauncher {
     pub fn launch(&mut self) {
         if updateusersettingsfile(self.username.clone(), self.current_version.clone()).is_err() {
-            println!("Could not save user settings!")
+            println!("Failed to save user settings!")
         };
 
         let mut wrapper_commands_vec: Vec<String> = self
@@ -304,15 +303,6 @@ impl Application for Siglauncher {
                                     });
                                     let index = self.downloaders.len() - 1;
                                     self.downloaders[index].start_missing_files(vec)
-                                }
-                                launcher::Missing::VanillaVersion(url, path) => {
-                                    self.launcher.state = LauncherState::Idle;
-
-                                    self.game_state_text = String::from("Downloading required jar");
-                                    return Command::perform(
-                                        async move { downloader::download_version_jar(url, path).await },
-                                        Message::VanillaJar,
-                                    );
                                 }
                                 launcher::Missing::VanillaJson(ver, folder) => {
                                     self.launcher.state = LauncherState::Idle;
@@ -696,11 +686,6 @@ impl Application for Siglauncher {
                     self.game_state_text = String::from("Json downloaded successfully.");
                 }
 
-                self.launch();
-                Command::none()
-            }
-            Message::VanillaJar(s) => {
-                self.game_state_text = s;
                 self.launch();
                 Command::none()
             }

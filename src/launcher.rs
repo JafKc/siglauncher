@@ -31,7 +31,6 @@ pub enum Missing {
     Java8,
     Java17,
     VersionFiles(Vec<super::downloader::Download>),
-    VanillaVersion(String, String),
     VanillaJson(String, String),
 }
 
@@ -132,32 +131,7 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                 let content = serde_json::from_str(&vanilla_json_content);
                 p = content.unwrap();
 
-                let version_jar_file_path = format!(
-                    "{}/versions/{}/{}.jar",
-                    minecraft_dir, game_settings.game_version, game_settings.game_version
-                );
-                let version_jar_file = match File::open(&version_jar_file_path) {
-                    Ok(ok) => ok,
-                    Err(e) => return ((id, Progress::Errored(e.to_string())), State::Idle),
-                };
-
-                if !Path::new(&version_jar_file_path).exists()
-                    || version_jar_file.metadata().unwrap().len() == 0
-                {
-                    return (
-                        (
-                            id,
-                            Progress::Checked(Some(Missing::VanillaVersion(
-                                p["downloads"]["client"]["url"]
-                                    .as_str()
-                                    .unwrap()
-                                    .to_string(),
-                                version_jar_file_path,
-                            ))),
-                        ),
-                        State::Idle,
-                    );
-                }
+                
             }
 
             // check for missing libraries, natives, assets and client jar
@@ -180,8 +154,8 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
 
             let is_natives_folder_empty = match fs::read_dir(format!("{}/natives", version_dir)) {
                 Ok(ok) => ok.count() == 0,
-                Err(e) => {
-                    println!("Natives folder not found: {e}\n ignoring");
+                Err(_) => {
+                    println!("Natives folder not found, ignoring.");
 
                     false
                 }
@@ -641,19 +615,36 @@ fn get_game_args(arguments: Vec<String>, gamedata: &[String]) -> Vec<String> {
 }
 
 fn get_game_jvm_args(p: &Value, nativedir: &str) -> Vec<String> {
+    let lib_dir = format!("{}/libraries", get_minecraft_dir());
+    let separator = match std::env::consts::OS{
+        "linux" => ":",
+        "windows" => ";",
+        _ => panic!(),
+    };
+
     let mut version_jvm_args = vec![];
     if let Some(arguments) = p["arguments"]["jvm"].as_array() {
         for i in arguments {
             if i.is_string() {
-                let value = i.as_str().unwrap();
+                let mut value = i.as_str().unwrap().to_string();
 
                 if value.contains("${natives_directory}") {
-                    let value = value.replace("${natives_directory}", nativedir);
-                    version_jvm_args.push(value);
-                } else if value == "${classpath}" || value == "-cp" {
-                } else {
-                    version_jvm_args.push(value.to_owned())
+                    value = value.replace("${natives_directory}", nativedir);
                 }
+                
+                if value.contains("${library_directory}"){
+                   value = value.replace("${library_directory}", &lib_dir);
+                }
+
+                if value.contains("${classpath_separator}"){
+                    value = value.replace("${classpath_separator}", separator);
+                 }
+                
+                if value != "${classpath}" || value != "-cp" {
+                    version_jvm_args.push(value.to_string())
+                } 
+
+                
             }
         }
     } else {
@@ -816,7 +807,7 @@ fn modded(
 
     let vanilla_version_jvm_args = get_game_jvm_args(
         &vjson,
-        &format!("{}/versions/{}/natives", &mc_dir, game_version),
+        &format!("{}/versions/{}/natives", &mc_dir, game_version)
     );
 
     let vanilla_library_list = &libmanager(&vjson);
