@@ -52,6 +52,7 @@ pub enum Container {
     #[default]
     Default,
     BlackContainer,
+    BlackerBlackContainer
 }
 
 impl container::StyleSheet for Theme {
@@ -66,6 +67,12 @@ impl container::StyleSheet for Theme {
                 border_radius: 25.0.into(),
                 ..Default::default()
             },
+            Container::BlackerBlackContainer => container::Appearance {
+                //background: Color::from_rgb8(49, 50, 68),
+                background: Some(Background::Color(Color::from_rgb8(24, 24, 37))),
+                border_radius: 25.0.into(),
+                ..Default::default()
+            }
         }
     }
 }
@@ -108,19 +115,40 @@ impl button::StyleSheet for Theme {
                 background: Some(Background::Color(Color::from_rgb8(30, 102, 245))),
                 border_radius: 15.0.into(),
                 border_width: 1.0,
-                border_color: Color::from_rgb(0.90, 0.90, 0.90),
+                border_color: Color::from_rgb8(205, 214, 244),
                 ..Default::default()
             },
             Button::Secondary => button::Appearance {
                 background: Some(Background::Color(Color::from_rgb8(5, 194, 112))),
                 border_radius: 15.0.into(),
                 border_width: 1.0,
-                border_color: Color::from_rgb(0.90, 0.90, 0.90),
+                border_color: Color::from_rgb8(205, 214, 244),
                 ..Default::default()
             },
             Button::Transparent => button::Appearance {
                 background: Some(Background::Color(Color::TRANSPARENT)),
                 border_radius: 100.0.into(),
+                ..Default::default()
+            },
+        }
+    }
+
+    fn disabled(&self, style: &Self::Style) -> button::Appearance {
+        match style {
+            Button::Primary => button::Appearance {
+                background: Some(Background::Color(Color::from_rgb8(46, 59, 98))),
+                border_radius: 15.0.into(),
+                border_width: 1.0,
+                border_color: color!(46, 59, 98),
+                ..Default::default()
+            },
+            Button::Secondary => button::Appearance {
+                background: Some(Background::Color(Color::from_rgb8(5, 194, 112))),
+                border_radius: 15.0.into(),
+                ..Default::default()
+            },
+            Button::Transparent => button::Appearance {
+                background: Some(Background::Color(Color::TRANSPARENT)),
                 ..Default::default()
             },
         }
@@ -142,7 +170,7 @@ impl text_input::StyleSheet for Theme {
             border_radius: 15.0.into(),
             border_width: 1.0,
             border_color: Color::from_rgb8(49, 50, 68),
-            icon_color: Color::from_rgb(0.90, 0.90, 0.90),
+            icon_color: Color::from_rgb8(205, 214, 244),
         }
     }
 
@@ -151,8 +179,8 @@ impl text_input::StyleSheet for Theme {
             background: iced::Background::Color(Color::from_rgb8(49, 50, 68)),
             border_radius: 15.0.into(),
             border_width: 1.0,
-            border_color: Color::from_rgb(0.90, 0.90, 0.90),
-            icon_color: Color::from_rgb(0.90, 0.90, 0.90),
+            border_color: Color::from_rgb8(205, 214, 244),
+            icon_color: Color::from_rgb8(205, 214, 244),
         }
     }
 
@@ -161,21 +189,21 @@ impl text_input::StyleSheet for Theme {
             background: iced::Background::Color(Color::from_rgb8(49, 50, 68)),
             border_radius: 15.0.into(),
             border_width: 1.0,
-            border_color: Color::from_rgb(0.90, 0.90, 0.90),
-            icon_color: Color::from_rgb(0.90, 0.90, 0.90),
+            border_color: Color::from_rgb8(205, 214, 244),
+            icon_color: Color::from_rgb8(205, 214, 244),
         }
     }
 
     fn placeholder_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.90, 0.90, 0.90)
+        Color::from_rgb8(88, 91, 112)
     }
 
     fn value_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.90, 0.90, 0.90)
+        Color::from_rgb8(205, 214, 244)
     }
 
     fn selection_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgb(0.90, 0.90, 0.90)
+        Color::from_rgb8(205, 214, 244)
     }
 
     fn disabled(&self, _style: &Self::Style) -> text_input::Appearance {
@@ -192,7 +220,7 @@ impl text_input::StyleSheet for Theme {
                 0x22 as f32 / 255.0,
                 0x25 as f32 / 255.0,
             ),
-            icon_color: Color::from_rgb(0.90, 0.90, 0.90),
+            icon_color: Color::from_rgb8(205, 214, 244),
         }
     }
 
@@ -213,14 +241,14 @@ impl pick_list::StyleSheet for Theme {
     fn active(&self, style: &Self::Style) -> pick_list::Appearance {
         match style {
             PickList::Default => pick_list::Appearance {
-                text_color: Color::from_rgb(0.90, 0.90, 0.90),
+                text_color: Color::from_rgb8(205, 214, 244),
                 background: iced::Background::Color(Color::from_rgb8(49, 50, 68)),
                 placeholder_color: Color::from_rgb(
                     0x20 as f32 / 255.0,
                     0x22 as f32 / 255.0,
                     0x25 as f32 / 255.0,
                 ),
-                handle_color: Color::from_rgb(0.90, 0.90, 0.90),
+                handle_color: Color::from_rgb8(205, 214, 244),
                 border_radius: 15.0.into(),
                 border_width: 1.0,
                 border_color: Color::from_rgb8(49, 50, 68),
@@ -230,17 +258,17 @@ impl pick_list::StyleSheet for Theme {
 
     fn hovered(&self, _style: &Self::Style) -> pick_list::Appearance {
         pick_list::Appearance {
-            text_color: Color::from_rgb(0.90, 0.90, 0.90),
+            text_color: Color::from_rgb8(205, 214, 244),
             background: iced::Background::Color(Color::from_rgb8(49, 50, 68)),
             placeholder_color: Color::from_rgb(
                 0x20 as f32 / 255.0,
                 0x22 as f32 / 255.0,
                 0x25 as f32 / 255.0,
             ),
-            handle_color: Color::from_rgb(0.90, 0.90, 0.90),
+            handle_color: Color::from_rgb8(205, 214, 244),
             border_radius: 15.0.into(),
             border_width: 1.0,
-            border_color: Color::from_rgb(0.90, 0.90, 0.90),
+            border_color: Color::from_rgb8(205, 214, 244),
         }
     }
 }
@@ -286,8 +314,8 @@ impl slider::StyleSheet for Theme {
                 slider::Appearance {
                     rail: slider::Rail {
                         colors: (
-                            Color::from_rgb(0.90, 0.90, 0.90),
-                            Color::from_rgb(0.90, 0.90, 0.90),
+                            Color::from_rgb8(205, 214, 244),
+                            Color::from_rgb8(205, 214, 244),
                         ),
                         width: 2.0,
                         border_radius: 4.0.into(),
@@ -298,7 +326,7 @@ impl slider::StyleSheet for Theme {
                             0x22 as f32 / 255.0,
                             0x25 as f32 / 255.0,
                         ),
-                        border_color: Color::from_rgb(0.90, 0.90, 0.90),
+                        border_color: Color::from_rgb8(205, 214, 244),
                         ..handle
                     },
                 }
@@ -351,12 +379,12 @@ impl menu::StyleSheet for Theme {
     fn appearance(&self, style: &Self::Style) -> menu::Appearance {
         match style {
             Menu::Default => menu::Appearance {
-                text_color: Color::from_rgb(0.90, 0.90, 0.90),
+                text_color: Color::from_rgb8(205, 214, 244),
                 background: iced::Background::Color(Color::from_rgb8(55, 55, 73)),
                 border_width: 0.0,
                 border_radius: 15.0.into(),
-                border_color: Color::from_rgb(0.90, 0.90, 0.90),
-                selected_text_color: Color::from_rgb(0.90, 0.90, 0.90),
+                border_color: Color::from_rgb8(205, 214, 244),
+                selected_text_color: Color::from_rgb8(205, 214, 244),
                 selected_background: iced::Background::Color(Color::from_rgb8(30, 102, 245)),
             },
         }
@@ -390,7 +418,7 @@ impl scrollable::StyleSheet for Theme {
                 border_width: 0.0,
                 border_color: Color::TRANSPARENT,
                 scroller: scrollable::Scroller {
-                    color: Color::from_rgb(0.90, 0.90, 0.90),
+                    color: Color::from_rgb8(205, 214, 244),
                     border_radius: 2.0.into(),
                     border_width: 0.0,
                     border_color: Color::TRANSPARENT,
@@ -413,7 +441,7 @@ impl scrollable::StyleSheet for Theme {
                         border_width: 0.0,
                         border_color: Color::TRANSPARENT,
                         scroller: scrollable::Scroller {
-                            color: Color::from_rgb(0.90, 0.90, 0.90),
+                            color: Color::from_rgb8(205, 214, 244),
                             border_radius: 2.0.into(),
                             border_width: 0.0,
                             border_color: Color::TRANSPARENT,
@@ -470,13 +498,13 @@ impl toggler::StyleSheet for Theme {
                 background: if is_active {
                     Color::from_rgb8(30, 102, 245)
                 } else {
-                    Color::from_rgb(0.90, 0.90, 0.90)
+                    Color::from_rgb8(205, 214, 244)
                 },
                 background_border: None,
                 foreground: if is_active {
-                    Color::from_rgb(0.90, 0.90, 0.90)
+                    Color::from_rgb8(205, 214, 244)
                 } else {
-                    Color::from_rgb(0.5, 0.5, 0.5)
+                    Color::from_rgb8(88, 91, 112)
                 },
                 foreground_border: None,
             },
@@ -487,12 +515,9 @@ impl toggler::StyleSheet for Theme {
         match style {
             Toggler::Default => toggler::Appearance {
                 foreground: if is_active {
-                    Color {
-                        a: 0.5,
-                        ..Color::from_rgb(0.90, 0.90, 0.90)
-                    }
+                    Color::from_rgb8(205, 214, 244)
                 } else {
-                    Color::from_rgb(0.5, 0.5, 0.5)
+                    Color::from_rgb8(88, 91, 112)
                 },
                 ..self.active(style, is_active)
             },

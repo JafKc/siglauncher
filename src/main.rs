@@ -4,13 +4,14 @@ use iced::{
     alignment, executor,
     widget::{
         button, column, container, pick_list, row, scrollable, slider, svg, text, text_input,
-        toggler,
+        toggler, tooltip, Button,
     },
     window, Alignment, Application, Command, Length, Settings, Subscription,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
-use std::env::set_current_dir;
+use widget::Renderer;
+use std::{env::set_current_dir, collections::HashMap};
 use std::fs::File;
 use std::io::Read;
 use std::{
@@ -53,6 +54,7 @@ struct Siglauncher {
     current_java: Java,
     current_game_profile: String,
     game_wrapper_commands: String,
+    game_enviroment_variables: String,
     show_all_versions_in_download_list: bool,
 
     all_versions: Vec<String>,
@@ -86,7 +88,7 @@ enum Screen {
     Java,
     GameProfile,
     Logs,
-    WrapperCommands,
+    ModifyCommand,
 }
 #[derive(Debug, Clone)]
 enum Message {
@@ -102,6 +104,7 @@ enum Message {
     GameProfileChanged(String),
     GameRamChanged(f64),
     GameWrapperCommandsChanged(String),
+    GameEnviromentVariablesChanged(String),
     ShowAllVersionsInDownloadListChanged(bool),
 
     GotDownloadList(Result<Vec<Vec<String>>, String>),
@@ -133,15 +136,36 @@ impl Siglauncher {
             println!("Failed to save user settings!")
         };
 
-        let mut wrapper_commands_vec: Vec<String> = self
+        let wrapper_commands_vec: Vec<String> = if !self.game_wrapper_commands.is_empty(){
+            self
             .game_wrapper_commands
             .split(' ')
             .map(|s| s.to_owned())
-            .collect();
+            .collect()
+        } else{
+            Vec::new()
+        };
 
-        if wrapper_commands_vec[0].is_empty() {
-            wrapper_commands_vec.remove(0);
-        }
+        let enviroment_variables_hash_map = if !self.game_enviroment_variables.is_empty(){
+            let mut hashmap = HashMap::new();  
+            let splitted_env_vars = self
+            .game_enviroment_variables
+            .split(' ');
+            
+            for i in splitted_env_vars{
+                if i.contains('='){
+                    let splitted_i: Vec<String> = i.split('=').map(|i| i.to_owned()).collect();
+                    hashmap.insert(splitted_i[0].clone(), splitted_i[1].clone());
+                }
+            }
+
+            hashmap
+            
+        } else{
+            HashMap::new()
+        };
+
+
 
         let game_settings = launcher::GameSettings {
             username: self.username.clone(),
@@ -157,8 +181,10 @@ impl Siglauncher {
             game_wrapper_commands: wrapper_commands_vec,
             game_directory: self.current_game_profile.clone(),
             autojava: self.current_java_name == "Automatic",
+            enviroment_variables: enviroment_variables_hash_map,
         };
         self.launcher.start(game_settings);
+        self.logs.clear();
     }
 }
 
@@ -248,6 +274,7 @@ impl Application for Siglauncher {
                 current_java: currentjava,
                 current_game_profile: p["current_game_profile"].as_str().unwrap().to_owned(),
                 game_wrapper_commands: p["game_wrapper_commands"].as_str().unwrap().to_owned(),
+                game_enviroment_variables: p["game_enviroment_variables"].as_str().unwrap().to_owned(),
                 show_all_versions_in_download_list: p["show_all_versions"].as_bool().unwrap(),
                 java_name_list: jvmnames,
                 game_profile_list: new_game_profile_list,
@@ -265,7 +292,10 @@ impl Application for Siglauncher {
     fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
         match message {
             Message::Launch => {
-                if !self.restrict_launch && !self.current_version.is_empty() && !self.username.is_empty(){
+                if !self.restrict_launch
+                    && !self.current_version.is_empty()
+                    && !self.username.is_empty()
+                {
                     self.launch();
                 }
                 Command::none()
@@ -329,14 +359,14 @@ impl Application for Siglauncher {
                         }
                     }
                     launcher::Progress::Started => {
-                        self.game_state_text = String::from("Game is running.")
+                        self.launcher.state = LauncherState::GettingLogs;
+                        self.game_state_text = String::new()
                     }
                     launcher::Progress::GotLog(log) => {
-                        self.launcher.state = LauncherState::GettingLogs;
                         self.logs.push(log);
                     }
                     launcher::Progress::Finished => {
-                        self.game_state_text = String::from("Game was closed.");
+                        self.game_state_text = String::new();
                         self.launcher.state = LauncherState::Idle;
                     }
                     launcher::Progress::Errored(e) => {
@@ -451,8 +481,8 @@ impl Application for Siglauncher {
                 self.game_ram = new_ram;
                 Command::none()
             }
-            Message::GameWrapperCommandsChanged(new_vars) => {
-                self.game_wrapper_commands = new_vars;
+            Message::GameWrapperCommandsChanged(s) => {
+                self.game_wrapper_commands = s;
                 Command::none()
             }
             Message::ShowAllVersionsInDownloadListChanged(bool) => {
@@ -693,6 +723,10 @@ impl Application for Siglauncher {
                 self.all_versions = ver_list;
                 Command::none()
             }
+            Message::GameEnviromentVariablesChanged(s) => {
+                self.game_enviroment_variables = s;
+                Command::none()
+            }
         }
     }
 
@@ -700,44 +734,47 @@ impl Application for Siglauncher {
         let sidebar = container(
             column![
                 //main
-                button(svg(svg::Handle::from_memory(
-                    include_bytes!("icons/home.svg").as_slice()
-                )))
-                .on_press(Message::ChangeScreen(Screen::Main))
-                .style(theme::Button::Transparent)
-                .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.)),
+                action(
+                    button(svg(svg::Handle::from_memory(
+                        include_bytes!("icons/home.svg").as_slice()
+                    )))
+                    .on_press(Message::ChangeScreen(Screen::Main))
+                    .style(theme::Button::Transparent)
+                    .width(Length::Fixed(40.))
+                    .height(Length::Fixed(40.)),
+                    "Main"
+                ),
                 //options
-                button(svg(svg::Handle::from_memory(
+                action(button(svg(svg::Handle::from_memory(
                     include_bytes!("icons/options.svg").as_slice()
                 )))
                 .on_press(Message::ChangeScreen(Screen::Options))
                 .style(theme::Button::Transparent)
                 .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.)),
+                .height(Length::Fixed(40.)), "Options"),
                 //download screen
-                button(svg(svg::Handle::from_memory(
+                action(button(svg(svg::Handle::from_memory(
                     include_bytes!("icons/download.svg").as_slice()
                 )))
                 .on_press(Message::ChangeScreen(Screen::Installation))
                 .style(theme::Button::Transparent)
                 .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.)),
+                .height(Length::Fixed(40.)), "Install a version"),
                 //account
-                button(svg(svg::Handle::from_memory(
+                action(button(svg(svg::Handle::from_memory(
                     include_bytes!("icons/account.svg").as_slice()
                 )))
                 .style(theme::Button::Transparent)
                 .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.)),
+                .height(Length::Fixed(40.)), "WIP"),
                 //github
-                button(svg(svg::Handle::from_memory(
+                action(button(svg(svg::Handle::from_memory(
                     include_bytes!("icons/github.svg").as_slice()
                 )))
                 .on_press(Message::GithubButtonPressed)
                 .style(theme::Button::Transparent)
                 .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.))
+                .height(Length::Fixed(40.)), "Redirect to github repository")
             ]
             .spacing(25)
             .align_items(Alignment::Center),
@@ -749,87 +786,97 @@ impl Application for Siglauncher {
         .height(Length::Fill);
 
         let content = match self.screen {
-            Screen::Main => column![
-                //mainscreen
-                //title
+            Screen::Main => {
+                let (launch_text, launch_message) = match self.launcher.state {
+                    LauncherState::Idle => ("Launch", Option::Some(Message::Launch)),
+                    LauncherState::Launching(_) => ("Launching", Option::None),
+                    LauncherState::GettingLogs => ("Running", Option::None),
+                };
+                let launch_button = button(
+                    text(launch_text)
+                        .size(40)
+                        .horizontal_alignment(alignment::Horizontal::Center),
+                )
+                .width(285)
+                .height(60)
+                .on_press_maybe(launch_message);
+
                 column![
-                    text("Siglauncher").size(50),
-                    text(format!("Hello {}!", self.username))
-                        .style(theme::Text::Peach)
-                        .size(18)
+                    //mainscreen
+                    //title
+                    column![
+                        text("Siglauncher").size(50),
+                        text(format!("Hello {}!", self.username))
+                            .style(theme::Text::Peach)
+                            .size(18)
+                    ]
+                    .spacing(5),
+                    //username and version input
+                    row![
+                        container(
+                            column![
+                                text("Username:"),
+                                text_input("Username", &self.username)
+                                    .on_input(Message::UsernameChanged)
+                                    .size(25)
+                                    .width(285),
+                                text("Version:"),
+                                pick_list(
+                                    &self.all_versions,
+                                    Some(self.current_version.clone()),
+                                    Message::VersionChanged,
+                                )
+                                .placeholder("Select a version")
+                                .width(285)
+                                .text_size(15)
+                            ]
+                            .spacing(10)
+                        )
+                        .style(theme::Container::BlackContainer)
+                        .padding(10),
+                        container(
+                            column![
+                                button(
+                                    text("Open game folder")
+                                        .horizontal_alignment(alignment::Horizontal::Center)
+                                )
+                                .width(200)
+                                .height(32)
+                                .on_press(Message::OpenGameFolder),
+                                button(
+                                    text("Open game profile folder")
+                                        .horizontal_alignment(alignment::Horizontal::Center)
+                                )
+                                .width(200)
+                                .height(32)
+                                .on_press(Message::OpenGameProfileFolder),
+                                button(
+                                    text("Logs")
+                                        .horizontal_alignment(alignment::Horizontal::Center)
+                                )
+                                .width(80)
+                                .height(32)
+                                .on_press(Message::ChangeScreen(Screen::Logs)),
+                            ]
+                            .spacing(10)
+                            .align_items(Alignment::Center)
+                        )
+                        .style(theme::Container::BlackContainer)
+                        .padding(20)
+                    ]
+                    .spacing(15),
+                    //launchbutton
+                    row![
+                        launch_button,
+                        text(&self.game_state_text)
+                            .style(theme::Text::Green)
+                            .size(18)
+                    ]
+                    .spacing(10),
                 ]
-                .spacing(5),
-                //username and version input
-                row![
-                    container(
-                        column![
-                            text("Username:"),
-                            text_input("Username", &self.username)
-                                .on_input(Message::UsernameChanged)
-                                .size(25)
-                                .width(285),
-                            text("Version:"),
-                            pick_list(
-                                &self.all_versions,
-                                Some(self.current_version.clone()),
-                                Message::VersionChanged,
-                            )
-                            .placeholder("Select a version")
-                            .width(285)
-                            .text_size(15)
-                        ]
-                        .spacing(10)
-                    )
-                    .style(theme::Container::BlackContainer)
-                    .padding(10),
-                    container(
-                        column![
-                            button(
-                                text("Open game folder")
-                                    .horizontal_alignment(alignment::Horizontal::Center)
-                            )
-                            .width(200)
-                            .height(32)
-                            .on_press(Message::OpenGameFolder),
-                            button(
-                                text("Open game profile folder")
-                                    .horizontal_alignment(alignment::Horizontal::Center)
-                            )
-                            .width(200)
-                            .height(32)
-                            .on_press(Message::OpenGameProfileFolder),
-                            button(
-                                text("Logs").horizontal_alignment(alignment::Horizontal::Center)
-                            )
-                            .width(80)
-                            .height(32)
-                            .on_press(Message::ChangeScreen(Screen::Logs)),
-                        ]
-                        .spacing(10)
-                        .align_items(Alignment::Center)
-                    )
-                    .style(theme::Container::BlackContainer)
-                    .padding(20)
-                ]
-                .spacing(15),
-                //launchbutton
-                row![
-                    button(
-                        text("Launch")
-                            .size(40)
-                            .horizontal_alignment(alignment::Horizontal::Center)
-                    )
-                    .width(285)
-                    .height(60)
-                    .on_press(Message::Launch),
-                    text(&self.game_state_text)
-                        .style(theme::Text::Green)
-                        .size(18)
-                ]
-                .spacing(10),
-            ]
-            .spacing(25)
-            .max_width(800),
+                .spacing(25)
+                .max_width(800)
+            }
 
             Screen::Options => column![
                 //optionsscreen
@@ -890,25 +937,26 @@ impl Application for Siglauncher {
                         column![
                             column![
                                 text(format!("Allocated memory: {}GiB", self.game_ram))
-                                    .size(30)
+                                    .size(25)
                                     .horizontal_alignment(alignment::Horizontal::Center),
                                 slider(0.5..=16.0, self.game_ram, Message::GameRamChanged)
                                     .width(250)
                                     .step(0.5)
                             ],
                             row![
-                                text("Show all versions in installer")
-                                    .horizontal_alignment(alignment::Horizontal::Center),
                                 toggler(
                                     String::new(),
                                     self.show_all_versions_in_download_list,
                                     Message::ShowAllVersionsInDownloadListChanged
                                 )
-                                .width(Length::Shrink)
+                                .width(Length::Shrink),
+                                text("Show all versions in installer")
+                                    .horizontal_alignment(alignment::Horizontal::Center)
+                                
                             ]
                             .spacing(10),
                             button("Add wrapper commands")
-                                .on_press(Message::ChangeScreen(Screen::WrapperCommands))
+                                .on_press(Message::ChangeScreen(Screen::ModifyCommand))
                         ]
                         .spacing(50)
                     )
@@ -1057,16 +1105,21 @@ impl Application for Siglauncher {
                     .padding(10)
             ]
             .spacing(15),
-            Screen::WrapperCommands => column![
-                text("Wrapper commands").size(50),
-                text("advanced setting, only edit if you know what you are doing.")
-                    .size(12)
+            Screen::ModifyCommand => column![
+                text("Modify game command").size(50),
+                text("advanced settings, only edit if you know what you are doing.")
+                    .size(15)
                     .style(theme::Text::Red),
-                text_input("wrapper_commands", &self.game_wrapper_commands)
+                text("Wraper commands").size(25),
+                text_input("Example: command1 command2", &self.game_wrapper_commands)
                     .on_input(Message::GameWrapperCommandsChanged)
+                    .size(12),
+                text("Enviroment variables").size(25),
+                text_input("Example: KEY1=value1 KEY2=value2", &self.game_enviroment_variables)
+                    .on_input(Message::GameEnviromentVariablesChanged)
                     .size(12)
             ]
-            .spacing(15),
+            .spacing(25),
         };
 
         container(row![sidebar, content].spacing(65))
@@ -1088,6 +1141,10 @@ impl Application for Siglauncher {
         Subscription::batch(subscriptions)
     }
 }
+
+fn action<'a>(widget: Button<'a, Message, Renderer>, tp_text: &str) -> Element<'a, Message> {
+    tooltip(widget, tp_text, tooltip::Position::Right).style(theme::Container::BlackerBlackContainer).padding(10).into()
+} 
 
 // Configuration file options{
 fn checksettingsfile() {
@@ -1114,6 +1171,10 @@ fn checksettingsfile() {
             map.insert(
                 "current_java_name".to_owned(),
                 serde_json::to_value(String::from("Automatic")).unwrap(),
+            );
+            map.insert(
+                "game_enviroment_variables".to_owned(),
+                serde_json::to_value(String::new()).unwrap(),
             );
             map.insert(
                 "game_wrapper_commands".to_owned(),

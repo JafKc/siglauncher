@@ -8,7 +8,7 @@ use std::{
     path::Path,
     process::{Command, Stdio},
     sync::mpsc::{self, Receiver},
-    thread::{self, JoinHandle},
+    thread::{self, JoinHandle}, collections::HashMap,
 };
 
 pub enum State {
@@ -54,6 +54,7 @@ pub struct GameSettings {
     pub game_directory: String,
     pub autojava: bool,
     pub game_wrapper_commands: Vec<String>,
+    pub enviroment_variables: HashMap<String, String>
 }
 async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
     match state {
@@ -130,20 +131,18 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
 
                 let content = serde_json::from_str(&vanilla_json_content);
                 p = content.unwrap();
-
-                
             }
 
             // check for missing libraries, natives, assets and client jar
 
-            let mut missing_libraries_list = Vec::new();
+            let mut missing_files_list = Vec::new();
             let version_jar_path = format!(
                 "{}/versions/{}/{}.jar",
                 minecraft_dir, game_settings.game_version, game_settings.game_version
             );
 
             if !Path::new(&version_jar_path).exists() {
-                missing_libraries_list.push(super::downloader::Download {
+                missing_files_list.push(super::downloader::Download {
                     path: version_jar_path,
                     url: p["downloads"]["client"]["url"]
                         .as_str()
@@ -172,13 +171,13 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                             if i.path.contains("natives.jar") {
                                 println!("AH VEADO");
                                 if is_natives_folder_empty {
-                                    missing_libraries_list.push(i);
+                                    missing_files_list.push(i);
                                     continue;
                                 } else {
                                     continue;
                                 }
                             }
-                            missing_libraries_list.push(i);
+                            missing_files_list.push(i);
                         }
                     }
                 }
@@ -229,7 +228,7 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                     Ok(ok) => {
                         for i in ok {
                             if !Path::new(&i.path).exists() {
-                                missing_libraries_list.push(i)
+                                missing_files_list.push(i)
                             }
                         }
                     }
@@ -237,22 +236,30 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                 }
             }
 
-            if !missing_libraries_list.is_empty() {
+            if !missing_files_list.is_empty() {
                 return (
                     (
                         id,
-                        Progress::Checked(Some(Missing::VersionFiles(missing_libraries_list))),
+                        Progress::Checked(Some(Missing::VersionFiles(missing_files_list))),
                     ),
                     State::Idle,
                 );
             }
             // check for java
             if game_settings.autojava {
-                if p["javaVersion"]["majorVersion"].as_i64().unwrap_or(0) > 8
+                let java_version = if let Some(java) = p["javaVersion"]["majorVersion"].as_i64() {
+                    java
+                } else if let Some(java) = p["javaVersion"]["Version"].as_i64() {
+                    java
+                } else {
+                    17
+                };
+
+                if java_version > 8
                     && !Path::new(&format!("{}/siglauncher_java/java17", minecraft_dir)).exists()
                 {
                     return ((id, Progress::Checked(Some(Missing::Java17))), State::Idle);
-                } else if p["javaVersion"]["majorVersion"].as_i64().unwrap_or(0) == 8
+                } else if java_version == 8
                     && !Path::new(&format!("{}/siglauncher_java/java8", minecraft_dir)).exists()
                 {
                     return ((id, Progress::Checked(Some(Missing::Java8))), State::Idle);
@@ -393,15 +400,14 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
             game_command
                 .arg(format!("-Xmx{}M", game_settings.ram * 1024.))
                 .args(java_args.clone())
+                .args(version_jvm_args.clone())
                 .arg("-cp")
                 .arg(library_list.clone())
-                .args(version_jvm_args.clone())
                 .arg(main_class)
                 .args(version_game_args.clone());
+            game_command.envs(game_settings.enviroment_variables);
 
-            println!("{:?}", game_command);
 
-            println!("Launching game process");
             if command_exists(game_command.get_program().to_str().unwrap()) {
                 let game_process_receiver = run_and_log_game(game_command);
                 if let Ok(game_pr_rec) = game_process_receiver.await {
@@ -616,7 +622,7 @@ fn get_game_args(arguments: Vec<String>, gamedata: &[String]) -> Vec<String> {
 
 fn get_game_jvm_args(p: &Value, nativedir: &str) -> Vec<String> {
     let lib_dir = format!("{}/libraries", get_minecraft_dir());
-    let separator = match std::env::consts::OS{
+    let separator = match std::env::consts::OS {
         "linux" => ":",
         "windows" => ";",
         _ => panic!(),
@@ -631,20 +637,18 @@ fn get_game_jvm_args(p: &Value, nativedir: &str) -> Vec<String> {
                 if value.contains("${natives_directory}") {
                     value = value.replace("${natives_directory}", nativedir);
                 }
-                
-                if value.contains("${library_directory}"){
-                   value = value.replace("${library_directory}", &lib_dir);
+
+                if value.contains("${library_directory}") {
+                    value = value.replace("${library_directory}", &lib_dir);
                 }
 
-                if value.contains("${classpath_separator}"){
+                if value.contains("${classpath_separator}") {
                     value = value.replace("${classpath_separator}", separator);
-                 }
-                
+                }
+
                 if value != "${classpath}" || value != "-cp" {
                     version_jvm_args.push(value.to_string())
-                } 
-
-                
+                }
             }
         }
     } else {
@@ -683,7 +687,7 @@ fn automatic_java(mut p: Value, game_version: &String, ismodded: bool) -> (Strin
     }
     let requiredjavaversion = p["javaVersion"]["majorVersion"].as_i64().unwrap_or(0);
 
-    let java17args = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu -XX:ShenandoahGuaranteedGCInterval=1000000 -XX:AllocatePrefetchStyle=1";
+    let java17args = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3";
     let java8args = "-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+ParallelRefProcEnabled -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+AggressiveOpts -XX:MaxInlineLevel=15 -XX:MaxVectorSize=32 -XX:ThreadPriorityPolicy=1 -XX:+UseNUMA -XX:+UseDynamicNumberOfGCThreads -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=350M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -Dgraal.CompilerConfiguration=community";
 
     if requiredjavaversion > 8 || requiredjavaversion == 0 {
@@ -807,7 +811,7 @@ fn modded(
 
     let vanilla_version_jvm_args = get_game_jvm_args(
         &vjson,
-        &format!("{}/versions/{}/natives", &mc_dir, game_version)
+        &format!("{}/versions/{}/natives", &mc_dir, game_version),
     );
 
     let vanilla_library_list = &libmanager(&vjson);
