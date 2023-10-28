@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use self::widget::Element;
 use iced::{
     alignment, executor,
@@ -10,16 +10,16 @@ use iced::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
-use widget::Renderer;
-use std::{env::set_current_dir, collections::HashMap};
 use std::fs::File;
 use std::io::Read;
+use std::{collections::HashMap, env::set_current_dir};
 use std::{
     env,
     fs::{self, OpenOptions},
     io::Write,
     path::Path,
 };
+use widget::Renderer;
 
 mod downloader;
 mod launcher;
@@ -136,36 +136,30 @@ impl Siglauncher {
             println!("Failed to save user settings!")
         };
 
-        let wrapper_commands_vec: Vec<String> = if !self.game_wrapper_commands.is_empty(){
-            self
-            .game_wrapper_commands
-            .split(' ')
-            .map(|s| s.to_owned())
-            .collect()
-        } else{
+        let wrapper_commands_vec: Vec<String> = if !self.game_wrapper_commands.is_empty() {
+            self.game_wrapper_commands
+                .split(' ')
+                .map(|s| s.to_owned())
+                .collect()
+        } else {
             Vec::new()
         };
 
-        let enviroment_variables_hash_map = if !self.game_enviroment_variables.is_empty(){
-            let mut hashmap = HashMap::new();  
-            let splitted_env_vars = self
-            .game_enviroment_variables
-            .split(' ');
-            
-            for i in splitted_env_vars{
-                if i.contains('='){
+        let enviroment_variables_hash_map = if !self.game_enviroment_variables.is_empty() {
+            let mut hashmap = HashMap::new();
+            let splitted_env_vars = self.game_enviroment_variables.split(' ');
+
+            for i in splitted_env_vars {
+                if i.contains('=') {
                     let splitted_i: Vec<String> = i.split('=').map(|i| i.to_owned()).collect();
                     hashmap.insert(splitted_i[0].clone(), splitted_i[1].clone());
                 }
             }
 
             hashmap
-            
-        } else{
+        } else {
             HashMap::new()
         };
-
-
 
         let game_settings = launcher::GameSettings {
             username: self.username.clone(),
@@ -274,7 +268,10 @@ impl Application for Siglauncher {
                 current_java: currentjava,
                 current_game_profile: p["current_game_profile"].as_str().unwrap().to_owned(),
                 game_wrapper_commands: p["game_wrapper_commands"].as_str().unwrap().to_owned(),
-                game_enviroment_variables: p["game_enviroment_variables"].as_str().unwrap().to_owned(),
+                game_enviroment_variables: p["game_enviroment_variables"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
                 show_all_versions_in_download_list: p["show_all_versions"].as_bool().unwrap(),
                 java_name_list: jvmnames,
                 game_profile_list: new_game_profile_list,
@@ -286,7 +283,7 @@ impl Application for Siglauncher {
     }
 
     fn title(&self) -> String {
-        String::from("Siglauncher 0.5.2")
+        String::from("Siglauncher 0.5.3")
     }
 
     fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
@@ -306,7 +303,7 @@ impl Application for Siglauncher {
                         if let Some(missing) = missing {
                             match missing {
                                 launcher::Missing::Java8 => {
-                                    self.launcher.state = LauncherState::Idle;
+                                    self.launcher.state = LauncherState::Waiting;
                                     self.downloaders.push(Downloader {
                                         state: DownloaderState::Idle,
                                         id: self.downloaders.len(),
@@ -315,7 +312,7 @@ impl Application for Siglauncher {
                                     self.downloaders[index].start_java(downloader::Java::J8)
                                 }
                                 launcher::Missing::Java17 => {
-                                    self.launcher.state = LauncherState::Idle;
+                                    self.launcher.state = LauncherState::Waiting;
                                     self.downloaders.push(Downloader {
                                         state: DownloaderState::Idle,
                                         id: self.downloaders.len(),
@@ -326,7 +323,7 @@ impl Application for Siglauncher {
                                 launcher::Missing::VersionFiles(vec) => {
                                     self.game_state_text =
                                         String::from("Found missing files. Starting download.");
-                                    self.launcher.state = LauncherState::Idle;
+                                    self.launcher.state = LauncherState::Waiting;
                                     self.downloaders.push(Downloader {
                                         state: DownloaderState::Idle,
                                         id: self.downloaders.len(),
@@ -335,7 +332,7 @@ impl Application for Siglauncher {
                                     self.downloaders[index].start_missing_files(vec)
                                 }
                                 launcher::Missing::VanillaJson(ver, folder) => {
-                                    self.launcher.state = LauncherState::Idle;
+                                    self.launcher.state = LauncherState::Waiting;
                                     self.game_state_text =
                                         String::from("Downloading required json");
                                     return Command::perform(
@@ -745,36 +742,48 @@ impl Application for Siglauncher {
                     "Main"
                 ),
                 //options
-                action(button(svg(svg::Handle::from_memory(
-                    include_bytes!("icons/options.svg").as_slice()
-                )))
-                .on_press(Message::ChangeScreen(Screen::Options))
-                .style(theme::Button::Transparent)
-                .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.)), "Options"),
+                action(
+                    button(svg(svg::Handle::from_memory(
+                        include_bytes!("icons/options.svg").as_slice()
+                    )))
+                    .on_press(Message::ChangeScreen(Screen::Options))
+                    .style(theme::Button::Transparent)
+                    .width(Length::Fixed(40.))
+                    .height(Length::Fixed(40.)),
+                    "Options"
+                ),
                 //download screen
-                action(button(svg(svg::Handle::from_memory(
-                    include_bytes!("icons/download.svg").as_slice()
-                )))
-                .on_press(Message::ChangeScreen(Screen::Installation))
-                .style(theme::Button::Transparent)
-                .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.)), "Install a version"),
+                action(
+                    button(svg(svg::Handle::from_memory(
+                        include_bytes!("icons/download.svg").as_slice()
+                    )))
+                    .on_press(Message::ChangeScreen(Screen::Installation))
+                    .style(theme::Button::Transparent)
+                    .width(Length::Fixed(40.))
+                    .height(Length::Fixed(40.)),
+                    "Install a version"
+                ),
                 //account
-                action(button(svg(svg::Handle::from_memory(
-                    include_bytes!("icons/account.svg").as_slice()
-                )))
-                .style(theme::Button::Transparent)
-                .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.)), "WIP"),
+                action(
+                    button(svg(svg::Handle::from_memory(
+                        include_bytes!("icons/account.svg").as_slice()
+                    )))
+                    .style(theme::Button::Transparent)
+                    .width(Length::Fixed(40.))
+                    .height(Length::Fixed(40.)),
+                    "WIP"
+                ),
                 //github
-                action(button(svg(svg::Handle::from_memory(
-                    include_bytes!("icons/github.svg").as_slice()
-                )))
-                .on_press(Message::GithubButtonPressed)
-                .style(theme::Button::Transparent)
-                .width(Length::Fixed(40.))
-                .height(Length::Fixed(40.)), "Redirect to github repository")
+                action(
+                    button(svg(svg::Handle::from_memory(
+                        include_bytes!("icons/github.svg").as_slice()
+                    )))
+                    .on_press(Message::GithubButtonPressed)
+                    .style(theme::Button::Transparent)
+                    .width(Length::Fixed(40.))
+                    .height(Length::Fixed(40.)),
+                    "Redirect to github repository"
+                )
             ]
             .spacing(25)
             .align_items(Alignment::Center),
@@ -791,6 +800,7 @@ impl Application for Siglauncher {
                     LauncherState::Idle => ("Launch", Option::Some(Message::Launch)),
                     LauncherState::Launching(_) => ("Launching", Option::None),
                     LauncherState::GettingLogs => ("Running", Option::None),
+                    LauncherState::Waiting => ("...", Option::None),
                 };
                 let launch_button = button(
                     text(launch_text)
@@ -952,7 +962,6 @@ impl Application for Siglauncher {
                                 .width(Length::Shrink),
                                 text("Show all versions in installer")
                                     .horizontal_alignment(alignment::Horizontal::Center)
-                                
                             ]
                             .spacing(10),
                             button("Add wrapper commands")
@@ -995,7 +1004,7 @@ impl Application for Siglauncher {
                 )
                 .width(250)
                 .height(40)
-                .on_press(Message::InstallVersion(downloader::VersionType::Vanilla))
+                .on_press_maybe(Some(Message::InstallVersion(downloader::VersionType::Vanilla)))
                 .style(theme::Button::Secondary)].spacing(15)).style(theme::Container::BlackContainer).padding(10),
 
                 //fabric
@@ -1018,7 +1027,7 @@ impl Application for Siglauncher {
                     )
                     .width(250)
                     .height(40)
-                    .on_press(Message::InstallVersion(downloader::VersionType::Fabric))
+                    .on_press_maybe(Some(Message::InstallVersion(downloader::VersionType::Fabric)))
                     .style(theme::Button::Secondary)].spacing(15)).style(theme::Container::BlackContainer).padding(10)].spacing(15),
 
                 if !self.show_all_versions_in_download_list{
@@ -1115,9 +1124,12 @@ impl Application for Siglauncher {
                     .on_input(Message::GameWrapperCommandsChanged)
                     .size(12),
                 text("Enviroment variables").size(25),
-                text_input("Example: KEY1=value1 KEY2=value2", &self.game_enviroment_variables)
-                    .on_input(Message::GameEnviromentVariablesChanged)
-                    .size(12)
+                text_input(
+                    "Example: KEY1=value1 KEY2=value2",
+                    &self.game_enviroment_variables
+                )
+                .on_input(Message::GameEnviromentVariablesChanged)
+                .size(12)
             ]
             .spacing(25),
         };
@@ -1143,8 +1155,11 @@ impl Application for Siglauncher {
 }
 
 fn action<'a>(widget: Button<'a, Message, Renderer>, tp_text: &str) -> Element<'a, Message> {
-    tooltip(widget, tp_text, tooltip::Position::Right).style(theme::Container::BlackerBlackContainer).padding(10).into()
-} 
+    tooltip(widget, tp_text, tooltip::Position::Right)
+        .style(theme::Container::BlackerBlackContainer)
+        .padding(10)
+        .into()
+}
 
 // Configuration file options{
 fn checksettingsfile() {
@@ -1263,7 +1278,8 @@ struct Launcher {
 #[derive(Debug, PartialEq)]
 enum LauncherState {
     Idle,
-    Launching(launcher::GameSettings),
+    Waiting,
+    Launching(Box<launcher::GameSettings>),
     GettingLogs,
 }
 impl Default for Launcher {
@@ -1275,7 +1291,7 @@ impl Default for Launcher {
 }
 impl Launcher {
     pub fn start(&mut self, game_settings: launcher::GameSettings) {
-        self.state = LauncherState::Launching(game_settings)
+        self.state = LauncherState::Launching(Box::new(game_settings))
     }
     pub fn subscription(&self) -> Subscription<Message> {
         match &self.state {
@@ -1284,6 +1300,7 @@ impl Launcher {
                 launcher::start(0, Some(game_settings)).map(Message::ManageGameInfo)
             }
             LauncherState::GettingLogs => launcher::start(0, None).map(Message::ManageGameInfo),
+            LauncherState::Waiting => Subscription::none(),
         }
     }
 }
