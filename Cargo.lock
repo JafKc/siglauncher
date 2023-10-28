@@ -1530,6 +1530,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "md5"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
+
+[[package]]
 name = "memchr"
 version = "2.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2533,13 +2539,15 @@ dependencies = [
 
 [[package]]
 name = "siglauncher"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "iced",
+ "md5",
  "open",
  "reqwest",
  "serde",
  "serde_json",
+ "uuid",
  "zip",
 ]
 
@@ -3147,6 +3155,15 @@ dependencies = [
  "strict-num",
  "svgtypes",
  "tiny-skia-path 0.10.0",
+]
+
+[[package]]
+name = "uuid"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88ad59a7560b41a70d191093a945f0b87bc1deeda46fb237479708a1d6b6cdfc"
+dependencies = [
+ "getrandom",
 ]
 
 [[package]]
