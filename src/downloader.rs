@@ -740,7 +740,6 @@ pub fn get_libraries(
     }
 
     let mut library_download_list = vec![];
-    let mut got_natives = false;
 
     for library in libraries {
         if library["rules"][0]["os"]["name"] == os || library["rules"][0]["os"]["name"].is_null() {
@@ -748,7 +747,11 @@ pub fn get_libraries(
             let mut lpieces: Vec<&str> = libraryname.split(':').collect();
             let firstpiece = lpieces.remove(0).replace('.', "/");
 
-            let libtype = if library["name"].as_str().unwrap().contains("natives") {
+            let libtype = if library["name"]
+                .as_str()
+                .unwrap()
+                .contains(&format!("natives-{}", os))
+            {
                 LibraryType::Natives
             } else if library["natives"][os].is_null() {
                 LibraryType::Normal
@@ -758,14 +761,14 @@ pub fn get_libraries(
 
             match libtype {
                 LibraryType::Natives => {
-                    lpieces.remove(lpieces.len() - 1);
+                    let last_piece = lpieces.pop().unwrap();
                     let lib = format!(
-                        "{}/{}/{}-{}-natives-{}.jar",
+                        "{}/{}/{}-{}-{}.jar",
                         &firstpiece,
                         &lpieces.join("/"),
                         &lpieces[&lpieces.len() - 2],
                         &lpieces[&lpieces.len() - 1],
-                        os
+                        last_piece
                     );
 
                     // create folder for lib
@@ -886,8 +889,7 @@ pub fn get_libraries(
             }
         }
 
-        if !got_natives && !library["downloads"]["classifiers"][format!("natives-{}", os)].is_null()
-        {
+        if !library["downloads"]["classifiers"][format!("natives-{}", os)].is_null() {
             let url = library["downloads"]["classifiers"][format!("natives-{}", os)]["url"]
                 .as_str()
                 .unwrap()
@@ -897,7 +899,6 @@ pub fn get_libraries(
             let path = format!("{}/natives/natives.jar", foldertosave);
 
             library_download_list.push(Download { path, url });
-            got_natives = true;
         }
     }
     Ok(library_download_list)

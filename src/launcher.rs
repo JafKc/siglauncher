@@ -1,6 +1,7 @@
 use iced::subscription;
 use serde_json::Value;
 use std::{
+    collections::HashMap,
     env,
     fs::{self, File},
     hash::Hash,
@@ -8,8 +9,9 @@ use std::{
     path::Path,
     process::{Command, Stdio},
     sync::mpsc::{self, Receiver},
-    thread::{self, JoinHandle}, collections::HashMap,
+    thread::{self, JoinHandle},
 };
+use uuid::Uuid;
 
 pub enum State {
     Checking(Option<GameSettings>),
@@ -54,7 +56,7 @@ pub struct GameSettings {
     pub game_directory: String,
     pub autojava: bool,
     pub game_wrapper_commands: Vec<String>,
-    pub enviroment_variables: HashMap<String, String>
+    pub enviroment_variables: HashMap<String, String>,
 }
 async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
     match state {
@@ -169,7 +171,6 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                     for i in ok {
                         if !Path::new(&i.path).exists() {
                             if i.path.contains("natives.jar") {
-                                println!("AH VEADO");
                                 if is_natives_folder_empty {
                                     missing_files_list.push(i);
                                     continue;
@@ -272,7 +273,6 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
             )
         }
         State::Launching(game_settings) => {
-            println!("Creating game command.");
             let minecraft_directory = get_minecraft_dir();
 
             let game_dir = if game_settings.game_directory == *"Default" {
@@ -320,6 +320,10 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
             //
             let mut version_game_args = vec![];
 
+            // uuid
+
+            let uuid = get_uuid_from_api(&game_settings.username).await;
+
             // this is used to get game args.
             let gamedata = vec![
                 game_settings.username,
@@ -327,7 +331,7 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                 game_dir.to_string(),
                 assets_dir,
                 asset_index,
-                String::from("000"),
+                uuid,
                 String::from("[pro]"),
                 String::from("{}"),
                 String::from("legacy"),
@@ -353,7 +357,10 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
 
             let (java_path, java_args) = match game_settings.autojava {
                 true => automatic_java(p.clone(), &game_settings.game_version, is_modded),
-                false => (game_settings.jvm, game_settings.jvmargs),
+                false => (
+                    format!("{}{}", game_settings.jvm, std::env::consts::EXE_SUFFIX),
+                    game_settings.jvmargs,
+                ),
             };
 
             library_list.push_str(&format!(
@@ -406,7 +413,6 @@ async fn launcher<I: Copy>(id: I, state: State) -> ((I, Progress), State) {
                 .arg(main_class)
                 .args(version_game_args.clone());
             game_command.envs(game_settings.enviroment_variables);
-
 
             if command_exists(game_command.get_program().to_str().unwrap()) {
                 let game_process_receiver = run_and_log_game(game_command);
@@ -717,6 +723,12 @@ fn libmanager(p: &Value) -> String {
             _ => panic!(),
         };
 
+        enum LibraryType {
+            Natives,
+            Normal,
+            Old,
+        }
+
         for library in libraries {
             if library["rules"][0]["os"]["name"] == os
                 || library["rules"][0]["os"]["name"].is_null()
@@ -726,46 +738,62 @@ fn libmanager(p: &Value) -> String {
                 let firstpiece = lpieces[0].replace('.', "/");
                 lpieces.remove(0);
 
-                if library["name"].as_str().unwrap().contains("natives") {
-                    lpieces.remove(lpieces.len() - 1);
-
-                    let libpath = format!(
-                        "{}{}/{}/{}-{}-natives-{}.jar",
-                        lib_dir,
-                        &firstpiece,
-                        &lpieces.join("/"),
-                        &lpieces[&lpieces.len() - 2],
-                        &lpieces[&lpieces.len() - 1],
-                        os
-                    );
-
-                    library_list.push_str(&libpath);
-                    library_list.push(separator);
+                let lib_type = if library["name"]
+                    .as_str()
+                    .unwrap()
+                    .contains(&format!("natives-{}", os))
+                {
+                    LibraryType::Natives
                 } else if library["natives"][os].is_null() {
-                    let libpath = format!(
-                        "{}{}/{}/{}-{}.jar",
-                        lib_dir,
-                        &firstpiece,
-                        &lpieces.join("/"),
-                        &lpieces[&lpieces.len() - 2],
-                        &lpieces[&lpieces.len() - 1]
-                    );
-
-                    library_list.push_str(&libpath);
-                    library_list.push(separator);
+                    LibraryType::Normal
                 } else {
-                    let libpath = format!(
-                        "{}{}/{}/{}-{}-natives-{}.jar",
-                        lib_dir,
-                        &firstpiece,
-                        &lpieces.join("/"),
-                        &lpieces[&lpieces.len() - 2],
-                        &lpieces[&lpieces.len() - 1],
-                        os
-                    );
+                    LibraryType::Old
+                };
 
-                    library_list.push_str(&libpath);
-                    library_list.push(separator);
+                match lib_type {
+                    LibraryType::Natives => {
+                        let last_piece = lpieces.pop().unwrap();
+
+                        let libpath = format!(
+                            "{}{}/{}/{}-{}-{}.jar",
+                            lib_dir,
+                            &firstpiece,
+                            &lpieces.join("/"),
+                            &lpieces[&lpieces.len() - 2],
+                            &lpieces[&lpieces.len() - 1],
+                            last_piece
+                        );
+
+                        library_list.push_str(&libpath);
+                        library_list.push(separator);
+                    }
+                    LibraryType::Normal => {
+                        let libpath = format!(
+                            "{}{}/{}/{}-{}.jar",
+                            lib_dir,
+                            &firstpiece,
+                            &lpieces.join("/"),
+                            &lpieces[&lpieces.len() - 2],
+                            &lpieces[&lpieces.len() - 1]
+                        );
+
+                        library_list.push_str(&libpath);
+                        library_list.push(separator);
+                    }
+                    LibraryType::Old => {
+                        let libpath = format!(
+                            "{}{}/{}/{}-{}-natives-{}.jar",
+                            lib_dir,
+                            &firstpiece,
+                            &lpieces.join("/"),
+                            &lpieces[&lpieces.len() - 2],
+                            &lpieces[&lpieces.len() - 1],
+                            os
+                        );
+
+                        library_list.push_str(&libpath);
+                        library_list.push(separator);
+                    }
                 }
             }
         }
@@ -840,4 +868,40 @@ fn command_exists(command_name: &str) -> bool {
     }
 
     false
+}
+
+async fn get_uuid_from_api(username: &str) -> String {
+    match reqwest::get(format!(
+        "https://api.mojang.com/users/profiles/minecraft/{}",
+        username
+    ))
+    .await
+    {
+        Ok(response) => match response.error_for_status() {
+            Ok(uuid) => match uuid.text().await {
+                Ok(uuid_string) => {
+                    let a: Value = serde_json::from_str(&uuid_string).unwrap();
+                    a["id"].as_str().unwrap().to_string()
+                }
+                Err(_) => {
+                    println!("Failed to get uuid from mojang. Generating one instead");
+                    generate_uuid(username)
+                }
+            },
+            Err(_) => {
+                println!("Failed to get uuid from mojang. Generating one instead.");
+                generate_uuid(username)
+            }
+        },
+        Err(_) => {
+            println!("Failed to get uuid from mojang. Generating one instead.");
+            generate_uuid(username)
+        }
+    }
+}
+
+fn generate_uuid(username: &str) -> String {
+    let hash = md5::compute(username.as_bytes());
+    let uuid = Uuid::from_slice(hash.as_slice()).unwrap();
+    uuid.to_string()
 }

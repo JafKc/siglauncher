@@ -52,7 +52,7 @@ pub enum Container {
     #[default]
     Default,
     BlackContainer,
-    BlackerBlackContainer
+    BlackerBlackContainer,
 }
 
 impl container::StyleSheet for Theme {
@@ -72,7 +72,7 @@ impl container::StyleSheet for Theme {
                 background: Some(Background::Color(Color::from_rgb8(24, 24, 37))),
                 border_radius: 25.0.into(),
                 ..Default::default()
-            }
+            },
         }
     }
 }
