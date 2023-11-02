@@ -28,13 +28,6 @@ mod theme;
 fn main() -> iced::Result {
     let icon = include_bytes!("icons/siglauncher.png");
 
-    #[cfg(target_os = "windows")]
-    {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("siglauncher.ico"); // Replace this with the filename of your .ico file.
-        res.compile().unwrap();
-    }
-
     Siglauncher::run(Settings {
         window: window::Settings {
             size: (800, 450),

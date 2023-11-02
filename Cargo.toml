@@ -4,6 +4,7 @@ version = "0.5.3"
 edition = "2021"
 authors = ["JafKc"]
 repository = "https://github.com/JafKc/siglauncher"
+build = "build.rs"
 
 [profile.release]
 strip = true
@@ -19,5 +20,5 @@ zip = "0.6.6"
 uuid = { version = "1.5.0", features = ["v4"] }
 md5 = "0.7.0"
 
-[target.'cfg(windows)'.dependencies]
+[target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
