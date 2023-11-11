@@ -195,7 +195,7 @@ impl Application for Siglauncher {
         // Configuration file
         checksettingsfile();
 
-        let mut file = File::open("siglauncher_settings.json").unwrap();
+        let mut file = File::open(get_config_file_path()).unwrap();
         let mut fcontent = String::new();
         file.read_to_string(&mut fcontent).unwrap();
         let content = serde_json::from_str(&fcontent);
@@ -443,7 +443,7 @@ impl Application for Siglauncher {
             Message::JavaChanged(selected_jvm_name) => {
                 set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
 
-                let mut file = File::open("siglauncher_settings.json").unwrap();
+                let mut file = File::open(get_config_file_path()).unwrap();
                 let mut fcontent = String::new();
                 file.read_to_string(&mut fcontent).unwrap();
                 let content = serde_json::from_str(&fcontent);
@@ -548,10 +548,7 @@ impl Application for Siglauncher {
                 if !self.jvm_to_add_name.is_empty() && !self.jvm_to_add_path.is_empty() {
                     set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
 
-                    let mut file = File::open("siglauncher_settings.json").unwrap();
-                    let mut contents = String::new();
-                    file.read_to_string(&mut contents).unwrap();
-                    let mut data: Value = serde_json::from_str(&contents).unwrap();
+                    let mut data = getjson(get_config_file_path());
 
                     let new_jvm = Java {
                         name: self.jvm_to_add_name.clone(),
@@ -576,7 +573,7 @@ impl Application for Siglauncher {
                     let mut file = OpenOptions::new()
                         .write(true)
                         .truncate(true)
-                        .open("siglauncher_settings.json")
+                        .open(get_config_file_path())
                         .unwrap();
                     file.write_all(serialized.as_bytes()).unwrap();
                     self.screen = Screen::Options;
@@ -1166,60 +1163,85 @@ fn action<'a>(widget: Button<'a, Message, Renderer>, tp_text: &str) -> Element<'
 
 // Configuration file options{
 fn checksettingsfile() {
-    set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
+    let mut conf_json = match Path::new(&get_config_file_path()).exists() {
+        true => getjson(get_config_file_path()),
+        false => serde_json::json!({}),
+    };
 
-    if !Path::new("siglauncher_settings.json").exists() {
-        let jvm = vec![
+    let mut file = File::create(get_config_file_path()).unwrap();
+
+    if let Value::Object(map) = &mut conf_json {
+        if !map.contains_key("JVMs") {
+            let jvm = vec![
                 Java{name: "Automatic".to_string(), path: String::new(), flags: String::new()},
                 Java{name:"System Java".to_string(),path:"java".to_string(),flags:"-XX:+UnlockExperimentalVMOptions -XX:+UnlockDiagnosticVMOptions -XX:+AlwaysActAsServerClassMachine -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+UseNUMA -XX:NmethodSweepActivity=1 -XX:ReservedCodeCacheSize=400M -XX:NonNMethodCodeHeapSize=12M -XX:ProfiledCodeHeapSize=194M -XX:NonProfiledCodeHeapSize=194M -XX:-DontCompileHugeMethods -XX:MaxNodeLimit=240000 -XX:NodeLimitFudgeFactor=8000 -XX:+UseVectorCmov -XX:+PerfDisableSharedMem -XX:+UseFastUnorderedTimeStamps -XX:+UseCriticalJavaThreadPriority -XX:ThreadPriorityPolicy=1 -XX:AllocatePrefetchStyle=3".to_string()}
             ];
 
-        let mut json = serde_json::json!({ "JVMs": jvm });
+            map.insert("JVMs".to_owned(), serde_json::to_value(jvm).unwrap());
+        }
 
-        if let Value::Object(map) = &mut json {
+        if !map.contains_key("username") {
             map.insert(
                 "username".to_owned(),
                 serde_json::to_value(String::from("player")).unwrap(),
             );
+        }
+
+        if !map.contains_key("current_version") {
             map.insert(
                 "current_version".to_owned(),
                 serde_json::to_value(String::new()).unwrap(),
             );
+        }
+
+        if !map.contains_key("game_ram") {
             map.insert("game_ram".to_owned(), serde_json::to_value(2.5).unwrap());
+        }
+
+        if !map.contains_key("current_java_name") {
             map.insert(
                 "current_java_name".to_owned(),
                 serde_json::to_value(String::from("Automatic")).unwrap(),
             );
+        }
+
+        if !map.contains_key("game_enviroment_variables") {
             map.insert(
                 "game_enviroment_variables".to_owned(),
                 serde_json::to_value(String::new()).unwrap(),
             );
+        }
+
+        if !map.contains_key("game_wrapper_commands") {
             map.insert(
                 "game_wrapper_commands".to_owned(),
                 serde_json::to_value(String::new()).unwrap(),
             );
+        }
+
+        if !map.contains_key("current_game_profile") {
             map.insert(
                 "current_game_profile".to_owned(),
                 serde_json::to_value(String::from("Default")).unwrap(),
             );
+        }
+
+        if !map.contains_key("show_all_versions") {
             map.insert(
                 "show_all_versions".to_owned(),
                 serde_json::to_value(false).unwrap(),
             );
         }
-
-        let serializedjson = serde_json::to_string_pretty(&json).unwrap();
-
-        let mut file = File::create("siglauncher_settings.json").unwrap();
-        file.write_all(serializedjson.as_bytes()).unwrap();
-        println!("New Json file created.")
     }
+    let serializedjson = serde_json::to_string_pretty(&conf_json).unwrap();
+
+    file.write_all(serializedjson.as_bytes()).unwrap();
 }
 
 fn updateusersettingsfile(username: String, version: String) -> std::io::Result<()> {
     set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
 
-    let mut file = File::open("siglauncher_settings.json")?;
+    let mut file = File::open(get_config_file_path())?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
@@ -1233,7 +1255,7 @@ fn updateusersettingsfile(username: String, version: String) -> std::io::Result<
     let mut file = OpenOptions::new()
         .write(true)
         .truncate(true)
-        .open("siglauncher_settings.json")?;
+        .open(get_config_file_path())?;
     file.write_all(serialized.as_bytes())?;
 
     Ok(())
@@ -1248,7 +1270,7 @@ fn updatesettingsfile(
 ) -> std::io::Result<()> {
     set_current_dir(env::current_exe().unwrap().parent().unwrap()).unwrap();
 
-    let mut file = File::open("siglauncher_settings.json")?;
+    let mut file = File::open(get_config_file_path())?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
@@ -1265,7 +1287,7 @@ fn updatesettingsfile(
     let mut file = OpenOptions::new()
         .write(true)
         .truncate(true)
-        .open("siglauncher_settings.json")?;
+        .open(get_config_file_path())?;
     file.write_all(serialized.as_bytes())?;
 
     Ok(())
@@ -1389,4 +1411,18 @@ fn getjson(jpathstring: String) -> Value {
     let mut fcontent = String::new();
     file.read_to_string(&mut fcontent).unwrap();
     serde_json::from_str(&fcontent).unwrap()
+}
+
+fn get_config_file_path() -> String {
+    #[cfg(debug_assertions)]
+    return format!(
+        "{}/siglauncher_settings_debug.json",
+        launcher::get_minecraft_dir()
+    );
+
+    #[cfg(not(debug_assertions))]
+    return format!(
+        "{}/siglauncher_settings.json",
+        launcher::get_minecraft_dir()
+    );
 }
